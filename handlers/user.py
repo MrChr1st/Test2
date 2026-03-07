@@ -3,14 +3,24 @@ from aiogram.filters import CommandStart
 from aiogram.filters.command import CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import Message
 
-from keyboards import card_submethod_kb, currency_kb, language_kb, main_menu_kb, paid_kb, payment_method_kb, rates_quotes_kb
+from keyboards import (
+    CURRENCIES,
+    QUOTE_CURRENCIES,
+    card_submethod_kb,
+    currency_kb,
+    language_kb,
+    main_menu_kb,
+    paid_kb,
+    payment_method_kb,
+    quote_currency_kb,
+    remove_kb,
+)
 from services.calculator import calculate_fee_with_referral_discount
 from texts import TEXTS
 
 router = Router()
-
 
 class ExchangeForm(StatesGroup):
     from_currency = State()
@@ -19,90 +29,85 @@ class ExchangeForm(StatesGroup):
     receive_details = State()
     payment_method = State()
 
+class RatesForm(StatesGroup):
+    quote = State()
 
 def get_lang(db, user_id: int) -> str:
     return db.get_language(user_id)
 
-
 def t(lang: str, key: str, **kwargs) -> str:
     return TEXTS[lang][key].format(**kwargs)
 
-async def ensure_not_blocked(message_or_callback, db, user_id: int) -> bool:
-    if db.is_user_blocked(user_id):
-        lang = db.get_language(user_id)
-        target = message_or_callback.message if hasattr(message_or_callback, "message") else message_or_callback
-        await target.answer(TEXTS[lang]["blocked"])
+def user_display(username: str | None, user_id: int) -> str:
+    return f"@{username}" if username else f"id={user_id}"
+
+def user_profile_link(user_id: int) -> str:
+    return f"tg://user?id={user_id}"
+
+async def ensure_not_blocked(message: Message, db) -> bool:
+    if db.is_user_blocked(message.from_user.id):
+        await message.answer(TEXTS[get_lang(db, message.from_user.id)]["blocked"])
         return False
     return True
 
-
 @router.message(CommandStart())
 async def start_handler(message: Message, command: CommandObject, db):
-    if db.is_user_blocked(message.from_user.id):
-        await message.answer(TEXTS['ru']['blocked'])
-        return
-    start_arg = command.args
     referred_by = None
-    if start_arg and start_arg.startswith("ref_"):
-        ref_code = start_arg.replace("ref_", "", 1).strip()
-        ref_user_id = db.get_user_id_by_ref_code(ref_code)
+    if command.args and command.args.startswith("ref_"):
+        code = command.args.replace("ref_", "", 1).strip()
+        ref_user_id = db.get_user_id_by_ref_code(code)
         if ref_user_id and ref_user_id != message.from_user.id:
             referred_by = ref_user_id
 
-    db.create_user_if_not_exists(
-        user_id=message.from_user.id,
-        username=message.from_user.username,
-        language="ru",
-        referred_by=referred_by,
-    )
+    db.create_user_if_not_exists(message.from_user.id, message.from_user.username, "ru", referred_by)
+
+    if db.is_user_blocked(message.from_user.id):
+        await message.answer(TEXTS["ru"]["blocked"])
+        return
+
     await message.answer(TEXTS["ru"]["choose_language"], reply_markup=language_kb())
 
-
 @router.message(F.text == "🇷🇺 Русский")
-async def set_russian(message: Message, db):
+async def set_ru(message: Message, db):
     db.set_language(message.from_user.id, "ru")
     await message.answer(TEXTS["ru"]["language_selected"], reply_markup=main_menu_kb("ru"))
 
-
 @router.message(F.text == "🇬🇧 English")
-async def set_english(message: Message, db):
+async def set_en(message: Message, db):
     db.set_language(message.from_user.id, "en")
     await message.answer(TEXTS["en"]["language_selected"], reply_markup=main_menu_kb("en"))
 
-
 @router.message(F.text.in_(["🌍 Смена языка", "🌍 Change language"]))
-async def change_language(message: Message):
+async def change_lang(message: Message):
     await message.answer(TEXTS["ru"]["choose_language"], reply_markup=language_kb())
-
 
 @router.message(F.text.in_(["🛟 Поддержка", "🛟 Support"]))
 async def support(message: Message, db, config):
-    if not await ensure_not_blocked(message, db, message.from_user.id):
+    if not await ensure_not_blocked(message, db):
         return
     lang = get_lang(db, message.from_user.id)
     await message.answer(t(lang, "support", support=config.support_username), reply_markup=main_menu_kb(lang))
 
-
 @router.message(F.text.in_(["🎁 Реферальная программа", "🎁 Referral program"]))
 async def referral(message: Message, db, config):
-    if not await ensure_not_blocked(message, db, message.from_user.id):
+    if not await ensure_not_blocked(message, db):
         return
     lang = get_lang(db, message.from_user.id)
-    user_id = message.from_user.id
-    code = db.get_user_ref_code(user_id)
+    code = db.get_user_ref_code(message.from_user.id)
     if not code:
-        db.create_user_if_not_exists(user_id, message.from_user.username, lang)
-        code = db.get_user_ref_code(user_id)
+        db.create_user_if_not_exists(message.from_user.id, message.from_user.username, lang)
+        code = db.get_user_ref_code(message.from_user.id)
 
-    invited = db.get_referrals_count(user_id)
-    completed = db.count_completed_referral_requests(user_id)
+    invited = db.get_referrals_count(message.from_user.id)
+    completed = db.count_completed_referral_requests(message.from_user.id)
     discount = min(invited * config.referral_fee_discount_per_user, config.max_referral_fee_discount)
     current_fee = max(config.fee - discount, 0.0)
     link = f"https://t.me/{config.bot_username}?start=ref_{code}"
 
     await message.answer(
         t(
-            lang, "referral",
+            lang,
+            "referral",
             code=code,
             link=link,
             invited=invited,
@@ -115,70 +120,64 @@ async def referral(message: Message, db, config):
         reply_markup=main_menu_kb(lang),
     )
 
-
 @router.message(F.text.in_(["📊 Курс валют", "📊 Rates"]))
-async def rates_intro(message: Message, db):
-    if not await ensure_not_blocked(message, db, message.from_user.id):
+async def rates_start(message: Message, db, state: FSMContext):
+    if not await ensure_not_blocked(message, db):
         return
     lang = get_lang(db, message.from_user.id)
-    await message.answer(TEXTS[lang]["rates_intro"], parse_mode="Markdown", reply_markup=rates_quotes_kb(lang))
+    await state.clear()
+    await state.set_state(RatesForm.quote)
+    await message.answer(TEXTS[lang]["rates_intro"], reply_markup=quote_currency_kb())
 
-
-@router.callback_query(F.data.startswith("ratesq:"))
-async def rates_quote(callback: CallbackQuery, db, rate_service):
-    lang = get_lang(db, callback.from_user.id)
-    quote = callback.data.split(":", 1)[1]
+@router.message(RatesForm.quote)
+async def rates_pick(message: Message, db, rate_service, state: FSMContext):
+    lang = get_lang(db, message.from_user.id)
+    quote = (message.text or "").strip().upper()
+    if quote not in QUOTE_CURRENCIES:
+        await message.answer(TEXTS[lang]["invalid_currency"], reply_markup=quote_currency_kb())
+        return
     table = await rate_service.get_table(quote)
-    body_lines = []
-    for cur, value in table.items():
-        if cur == quote:
-            continue
-        body_lines.append(f"• 1 {cur} = `{value}` {quote}")
-    body = "\n".join(body_lines)
-    await callback.message.answer(
-        t(lang, "rates_fmt", quote=quote, body=body, bonus=0),
-        parse_mode="Markdown",
-        reply_markup=main_menu_kb(lang),
-    )
-    await callback.answer()
-
+    body = "\n".join(f"• 1 {cur} = `{val}` {quote}" for cur, val in table.items() if cur != quote)
+    await state.clear()
+    await message.answer(t(lang, "rates_fmt", quote=quote, body=body), parse_mode="Markdown", reply_markup=main_menu_kb(lang))
 
 @router.message(F.text.in_(["💱 Обменять", "💱 Exchange"]))
 async def exchange_start(message: Message, db, state: FSMContext):
-    if not await ensure_not_blocked(message, db, message.from_user.id):
+    if not await ensure_not_blocked(message, db):
         return
     lang = get_lang(db, message.from_user.id)
     await state.clear()
     await state.set_state(ExchangeForm.from_currency)
-    await message.answer(TEXTS[lang]["exchange_intro"], reply_markup=currency_kb("from"))
+    await message.answer(TEXTS[lang]["exchange_intro"], reply_markup=currency_kb())
 
-
-@router.callback_query(ExchangeForm.from_currency, F.data.startswith("from:"))
-async def choose_from(callback: CallbackQuery, state: FSMContext, db):
-    lang = get_lang(db, callback.from_user.id)
-    from_currency = callback.data.split(":", 1)[1]
-    await state.update_data(from_currency=from_currency)
-    await state.set_state(ExchangeForm.to_currency)
-    await callback.message.answer(TEXTS[lang]["choose_to"], reply_markup=currency_kb("to", exclude=from_currency))
-    await callback.answer()
-
-
-@router.callback_query(ExchangeForm.to_currency, F.data.startswith("to:"))
-async def choose_to(callback: CallbackQuery, state: FSMContext, db):
-    lang = get_lang(db, callback.from_user.id)
-    to_currency = callback.data.split(":", 1)[1]
-    data = await state.get_data()
-    if to_currency == data.get("from_currency"):
-        await callback.answer(TEXTS[lang]["same_currency"], show_alert=True)
+@router.message(ExchangeForm.from_currency)
+async def exchange_from(message: Message, db, state: FSMContext):
+    lang = get_lang(db, message.from_user.id)
+    cur = (message.text or "").strip().upper()
+    if cur not in CURRENCIES:
+        await message.answer(TEXTS[lang]["invalid_currency"], reply_markup=currency_kb())
         return
-    await state.update_data(to_currency=to_currency)
-    await state.set_state(ExchangeForm.amount)
-    await callback.message.answer(TEXTS[lang]["enter_amount"], reply_markup=main_menu_kb(lang))
-    await callback.answer()
+    await state.update_data(from_currency=cur)
+    await state.set_state(ExchangeForm.to_currency)
+    await message.answer(TEXTS[lang]["choose_to"], reply_markup=currency_kb(exclude=cur))
 
+@router.message(ExchangeForm.to_currency)
+async def exchange_to(message: Message, db, state: FSMContext):
+    lang = get_lang(db, message.from_user.id)
+    cur = (message.text or "").strip().upper()
+    data = await state.get_data()
+    if cur not in CURRENCIES:
+        await message.answer(TEXTS[lang]["invalid_currency"], reply_markup=currency_kb(exclude=data.get("from_currency")))
+        return
+    if cur == data.get("from_currency"):
+        await message.answer(TEXTS[lang]["same_currency"], reply_markup=currency_kb(exclude=data.get("from_currency")))
+        return
+    await state.update_data(to_currency=cur)
+    await state.set_state(ExchangeForm.amount)
+    await message.answer(TEXTS[lang]["enter_amount"], reply_markup=remove_kb())
 
 @router.message(ExchangeForm.amount)
-async def amount_input(message: Message, state: FSMContext, db, config, rate_service):
+async def exchange_amount(message: Message, db, config, rate_service, state: FSMContext):
     lang = get_lang(db, message.from_user.id)
     raw = (message.text or "").replace(",", ".").strip()
     try:
@@ -186,23 +185,18 @@ async def amount_input(message: Message, state: FSMContext, db, config, rate_ser
         if amount <= 0:
             raise ValueError
     except Exception:
-        await message.answer(TEXTS[lang]["invalid_amount"], reply_markup=main_menu_kb(lang))
+        await message.answer(TEXTS[lang]["invalid_amount"], reply_markup=remove_kb())
         return
 
     data = await state.get_data()
-    referrals_count = db.get_referrals_count(message.from_user.id)
     fee_fraction = calculate_fee_with_referral_discount(
-        base_fee=config.fee,
-        referrals_count=referrals_count,
-        discount_per_user=config.referral_fee_discount_per_user,
-        max_discount=config.max_referral_fee_discount,
+        config.fee,
+        db.get_referrals_count(message.from_user.id),
+        config.referral_fee_discount_per_user,
+        config.max_referral_fee_discount,
     )
-    result_amount, market_rate = await rate_service.convert(
-        amount,
-        data["from_currency"],
-        data["to_currency"],
-        fee_fraction,
-    )
+    result_amount, market_rate = await rate_service.convert(amount, data["from_currency"], data["to_currency"], fee_fraction)
+
     await state.update_data(
         amount_from=amount,
         amount_to=result_amount,
@@ -210,9 +204,11 @@ async def amount_input(message: Message, state: FSMContext, db, config, rate_ser
         fee_fraction=fee_fraction,
     )
     await state.set_state(ExchangeForm.receive_details)
+
     await message.answer(
         t(
-            lang, "summary",
+            lang,
+            "summary",
             amount_from=amount,
             amount_to=result_amount,
             from_cur=data["from_currency"],
@@ -221,134 +217,119 @@ async def amount_input(message: Message, state: FSMContext, db, config, rate_ser
             fee=fee_fraction * 100,
         ),
         parse_mode="Markdown",
-        reply_markup=main_menu_kb(lang),
+        reply_markup=remove_kb(),
     )
-    await message.answer(TEXTS[lang]["enter_receive"])
-
+    await message.answer(TEXTS[lang]["enter_receive"], reply_markup=remove_kb())
 
 @router.message(ExchangeForm.receive_details)
-async def receive_details_input(message: Message, state: FSMContext, db):
+async def exchange_receive(message: Message, db, state: FSMContext):
     lang = get_lang(db, message.from_user.id)
     await state.update_data(receive_details=(message.text or "").strip())
     await state.set_state(ExchangeForm.payment_method)
     await message.answer(TEXTS[lang]["choose_payment"], reply_markup=payment_method_kb(lang))
 
+@router.message(ExchangeForm.payment_method)
+async def exchange_payment(message: Message, db, config, state: FSMContext, bot):
+    lang = get_lang(db, message.from_user.id)
+    text = (message.text or "").strip()
 
-@router.callback_query(ExchangeForm.payment_method, F.data.startswith("pay:"))
-async def choose_payment(callback: CallbackQuery, state: FSMContext, db, config):
-    lang = get_lang(db, callback.from_user.id)
-    method = callback.data.split(":", 1)[1]
-    await state.update_data(payment_method=method)
-    if method == "card":
-        await callback.message.answer(TEXTS[lang]["choose_card_submethod"], reply_markup=card_submethod_kb(lang))
-    else:
-        await _finalize_request(callback.message, callback.from_user.id, callback.from_user.username or "", state, db, config, lang, method, None)
-    await callback.answer()
-
-
-@router.callback_query(ExchangeForm.payment_method, F.data.startswith("cardsub:"))
-async def choose_card_submethod(callback: CallbackQuery, state: FSMContext, db, config, bot):
-    lang = get_lang(db, callback.from_user.id)
-    submethod = callback.data.split(":", 1)[1]
-    if submethod == "tg_wallet":
-        request_id = await _finalize_request(callback.message, callback.from_user.id, callback.from_user.username or "", state, db, config, lang, "card", "tg_wallet")
+    if text in ["🪙 Крипта", "🪙 Crypto"]:
+        await _finalize_request(message, state, db, config, lang, "crypto", "-")
+        return
+    if text in ["⚡ СБП", "⚡ SBP"]:
+        await _finalize_request(message, state, db, config, lang, "sbp", "-")
+        return
+    if text in ["💳 Карта", "💳 Card"]:
+        await message.answer(TEXTS[lang]["choose_card_submethod"], reply_markup=card_submethod_kb(lang))
+        return
+    if text in ["💳 Номер карты", "💳 Card number"]:
+        await _finalize_request(message, state, db, config, lang, "card", "card_number")
+        return
+    if text == "💬 Telegram Wallet":
+        request_id = await _finalize_request(message, state, db, config, lang, "card", "tg_wallet", wallet_mode=True)
         row = db.get_request_by_id(request_id)
-        db.update_request_status(request_id, "wallet_operator")
         admin_text = t(
-            "ru", "admin_wallet_urgent",
+            "ru",
+            "admin_wallet_urgent",
             request_id=row["id"],
-            username=row["username"] or "no_username",
+            user_display=user_display(row["username"], row["user_id"]),
             user_id=row["user_id"],
+            profile_link=user_profile_link(row["user_id"]),
             from_cur=row["from_currency"],
             to_cur=row["to_currency"],
             amount_from=row["amount_from"],
             amount_to=row["amount_to"],
             receive_details=row["receive_details"],
         )
+        db.update_request_status(request_id, "wallet_operator")
         for admin_id in config.admin_ids:
             try:
                 await bot.send_message(admin_id, admin_text, parse_mode="Markdown")
             except Exception:
                 pass
-        await callback.message.answer(
-            t(lang, "wallet_operator_msg", support=config.support_username),
-            reply_markup=main_menu_kb(lang),
-        )
-    else:
-        await _finalize_request(callback.message, callback.from_user.id, callback.from_user.username or "", state, db, config, lang, "card", "card_number", direct_card=True)
-    await callback.answer()
+        await message.answer(t(lang, "wallet_operator_msg", support=config.support_username), reply_markup=main_menu_kb(lang))
+        return
 
+    await message.answer(TEXTS[lang]["choose_payment"], reply_markup=payment_method_kb(lang))
 
-async def _finalize_request(message: Message, user_id: int, username: str, state: FSMContext, db, config, lang: str, method: str, submethod: str | None, direct_card: bool = False) -> int:
+async def _finalize_request(message, state, db, config, lang, method, submethod, wallet_mode=False):
     data = await state.get_data()
-    labels = {
-        "ru": {"card": "Карта", "sbp": "СБП", "crypto": "Крипта"},
-        "en": {"card": "Card", "sbp": "SBP", "crypto": "Crypto"},
-    }[lang]
-    sublabels = {
-        "ru": {"card_number": "Номер карты", "tg_wallet": "Telegram Wallet", None: "-"},
-        "en": {"card_number": "Card number", "tg_wallet": "Telegram Wallet", None: "-"},
-    }[lang]
-
-    urls = {
-        "card": config.card_payment_url,
-        "sbp": config.sbp_payment_url,
-        "crypto": config.crypto_payment_url,
+    method_labels = {
+        "ru": {"crypto": "Крипта", "sbp": "СБП", "card": "Карта"},
+        "en": {"crypto": "Crypto", "sbp": "SBP", "card": "Card"},
     }
-    payment_url = urls[method]
+    sub_labels = {
+        "ru": {"card_number": "Номер карты", "tg_wallet": "Telegram Wallet", "-": "-"},
+        "en": {"card_number": "Card number", "tg_wallet": "Telegram Wallet", "-": "-"},
+    }
+    payment_url = {
+        "crypto": config.crypto_payment_url,
+        "sbp": config.sbp_payment_url,
+        "card": config.card_payment_url,
+    }[method]
 
     request_id = db.create_exchange_request(
-        user_id=user_id,
-        username=username,
+        user_id=message.from_user.id,
+        username=message.from_user.username or "",
         from_currency=data["from_currency"],
         to_currency=data["to_currency"],
         amount_from=data["amount_from"],
         amount_to=data["amount_to"],
         receive_details=data["receive_details"],
-        payment_method=labels[method],
-        payment_submethod=sublabels[submethod],
+        payment_method=method_labels[lang][method],
+        payment_submethod=sub_labels[lang][submethod],
         payment_url=payment_url,
         status="waiting_payment",
     )
     await state.clear()
 
-    if direct_card:
-        await message.answer(
-            t(lang, "card_number_payment", card_number=config.card_number),
-            parse_mode="Markdown",
-            reply_markup=paid_kb(lang),
-        )
-    elif method == "card" and submethod == "tg_wallet":
-        pass
+    if wallet_mode:
+        return request_id
+
+    if method == "card" and submethod == "card_number":
+        await message.answer(t(lang, "card_number_payment", card_number=config.card_number), parse_mode="Markdown", reply_markup=paid_kb(lang))
     else:
-        await message.answer(
-            t(lang, "request_created", request_id=request_id, payment_method=labels[method], payment_url=payment_url),
-            parse_mode="Markdown",
-            reply_markup=paid_kb(lang),
-        )
+        await message.answer(t(lang, "request_created", request_id=request_id, payment_method=method_labels[lang][method], payment_url=payment_url), parse_mode="Markdown", reply_markup=paid_kb(lang))
     return request_id
 
-
-@router.callback_query(F.data == "mark_paid")
-async def mark_paid(callback: CallbackQuery, db, config, bot):
-    lang = get_lang(db, callback.from_user.id)
-    request_row = db.get_active_request(callback.from_user.id)
+@router.message(F.text.in_(["✅ Я оплатил", "✅ I paid"]))
+async def mark_paid(message: Message, db, config, bot):
+    lang = get_lang(db, message.from_user.id)
+    request_row = db.get_active_request(message.from_user.id)
     if not request_row or request_row["status"] != "waiting_payment":
-        await callback.message.answer(TEXTS[lang]["no_active_request"], reply_markup=main_menu_kb(lang))
-        await callback.answer()
+        await message.answer(TEXTS[lang]["no_active_request"], reply_markup=main_menu_kb(lang))
         return
 
     db.update_request_status(request_row["id"], "paid_pending_review")
-    await callback.message.answer(
-        t(lang, "paid_thanks", support=config.support_username),
-        reply_markup=main_menu_kb(lang),
-    )
+    await message.answer(t(lang, "paid_thanks", support=config.support_username), reply_markup=main_menu_kb(lang))
 
     admin_text = t(
-        "ru", "admin_new_paid",
+        "ru",
+        "admin_new_paid",
         request_id=request_row["id"],
-        username=request_row["username"] or "no_username",
+        user_display=user_display(request_row["username"], request_row["user_id"]),
         user_id=request_row["user_id"],
+        profile_link=user_profile_link(request_row["user_id"]),
         from_cur=request_row["from_currency"],
         to_cur=request_row["to_currency"],
         amount_from=request_row["amount_from"],
@@ -361,5 +342,3 @@ async def mark_paid(callback: CallbackQuery, db, config, bot):
             await bot.send_message(admin_id, admin_text, parse_mode="Markdown")
         except Exception:
             pass
-
-    await callback.answer()
