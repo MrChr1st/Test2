@@ -78,3 +78,16 @@ def card_action_kb(lang: str):
         ]
     )
 
+
+
+def back_kb(lang: str):
+    return _reply([["⬅️ Back"]] if lang == "en" else [["⬅️ Назад"]])
+
+def payment_method_with_back_kb(lang: str):
+    return _reply([["🪙 Crypto", "💳 Card", "⚡ SBP"], ["⬅️ Back"]] if lang == "en" else [["🪙 Крипта", "💳 Карта", "⚡ СБП"], ["⬅️ Назад"]])
+
+def card_submethod_with_back_kb(lang: str):
+    return _reply([["💳 Card number", "💬 Telegram Wallet"], ["⬅️ Back"]] if lang == "en" else [["💳 Номер карты", "💬 Telegram Wallet"], ["⬅️ Назад"]])
+
+def crypto_choice_with_back_kb(lang: str):
+    return _reply([["BYBIT ID", "USDT (TRC20)"], ["TON", "BTC"], ["⬅️ Back"]] if lang == "en" else [["BYBIT ID", "USDT (TRC20)"], ["TON", "BTC"], ["⬅️ Назад"]])

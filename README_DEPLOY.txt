@@ -16,3 +16,5 @@
 3. Запуск: python main.py
 
 Crypto payment options now include BYBIT ID, USDT (TRC20), TON, and BTC copy buttons.
+
+CHANNEL_TARGET: invite link alone is not enough. Add the bot to the channel as admin and set CHANNEL_TARGET to @channelusername or numeric chat id.

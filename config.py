@@ -19,6 +19,7 @@ class Config:
     sbp_payment_url: str
     card_number: str
     bybit_id: str
+    channel_target: str
 
 
 def parse_admin_ids(raw: str) -> List[int]:
@@ -45,4 +46,5 @@ def load_config() -> Config:
         sbp_payment_url=os.getenv("SBP_PAYMENT_URL", "https://www.donationalerts.com/r/eeexchanger").strip(),
         card_number=os.getenv("CARD_NUMBER", "5599002046385292").strip(),
         bybit_id=os.getenv("BYBIT_ID", "204479397").strip(),
+        channel_target=os.getenv("CHANNEL_TARGET", "").strip(),
     )
