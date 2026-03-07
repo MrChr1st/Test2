@@ -66,9 +66,9 @@ class RateService:
         values = await self.get_usd_values()
         market_rate = values[from_currency] / values[to_currency]
         result = amount * market_rate * (1 - fee_fraction)
-        return round(result, 8), round(market_rate, 8)
+        return result, market_rate
 
     async def get_table(self, quote: str):
         values = await self.get_usd_values()
         q = values[quote]
-        return {cur: round(val / q, 8) for cur, val in values.items()}
+        return {cur: (val / q) for cur, val in values.items()}
