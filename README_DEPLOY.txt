@@ -1,33 +1,14 @@
-UPLOAD TO GITHUB
-- main.py
-- config.py
-- database.py
-- i18n.py
-- keyboards.py
-- handlers/
-- services/
-- requirements.txt
-- .env.example
-- .gitignore
-- README_DEPLOY.txt
-
-DO NOT UPLOAD TO GITHUB
-- your real .env
-- exchange_bot.db
-
-CREATE IN BOTHOST
-1. Create .env using .env.example
-2. Install dependencies:
+1. Copy all files to your GitHub repository.
+2. Create .env from .env.example.
+3. Fill BOT_TOKEN and later replace CARD_PAYMENT_URL / CRYPTO_PAYMENT_URL with real links.
+4. Install dependencies:
    pip install -r requirements.txt
-3. Start:
+5. Start:
    python main.py
 
-READY VALUES FOR YOUR PROJECT
-ADMIN_IDS=8500366305
-SUPPORT_USERNAME=@eeexxxchangerrr
-BOT_USERNAME=Ccchangerrr_bot
+Admin command:
+   /requests  -> show up to 100 latest requests
 
-ADMIN COMMANDS
-/admin
-/admin_stats
-/admin_requests
+Admin commands:
+   /block USER_ID   -> block a user
+   /unblock USER_ID -> unblock a user
