@@ -24,13 +24,13 @@ async def main():
         cache_ttl=config.rate_cache_ttl,
     )
 
-    dp["config"] = config
-    dp["db"] = db
-    dp["rate_service"] = rate_service
+    dp['config'] = config
+    dp['db'] = db
+    dp['rate_service'] = rate_service
 
     dp.include_router(router)
     await dp.start_polling(bot)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     asyncio.run(main())
