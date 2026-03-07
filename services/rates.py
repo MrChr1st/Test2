@@ -9,15 +9,15 @@ class RateService:
         self.coingecko_url = coingecko_url
         self.frankfurter_url = frankfurter_url
         self.cache_ttl = cache_ttl
-        self._cache: Dict[str, float] | None = None
-        self._cache_time: float = 0.0
+        self.cache: Dict[str, float] | None = None
+        self.cache_time: float = 0.0
 
-    async def _fetch_crypto_rates_in_usd(self) -> Dict[str, float]:
+    async def _crypto(self) -> Dict[str, float]:
         params = {"ids": "bitcoin,tether,toncoin", "vs_currencies": "usd"}
         async with aiohttp.ClientSession() as session:
-            async with session.get(self.coingecko_url, params=params, timeout=15) as response:
-                response.raise_for_status()
-                data = await response.json()
+            async with session.get(self.coingecko_url, params=params, timeout=15) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
         return {
             "BTC": float(data["bitcoin"]["usd"]),
             "USDT": float(data["tether"]["usd"]),
@@ -25,13 +25,13 @@ class RateService:
             "USD": 1.0,
         }
 
-    async def _fetch_fiat_rates_in_usd(self) -> Dict[str, float]:
+    async def _fiat(self) -> Dict[str, float]:
         url = f"{self.frankfurter_url}?base=USD&symbols=EUR,INR,RUB"
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=15) as response:
-                response.raise_for_status()
-                data = await response.json()
-        rates = data.get("rates", {})
+            async with session.get(url, timeout=15) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+        rates = data["rates"]
         return {
             "USD": 1.0,
             "EUR": 1 / float(rates["EUR"]),
@@ -40,18 +40,18 @@ class RateService:
         }
 
     async def get_usd_values(self) -> Dict[str, float]:
-        now = time.time()
-        if self._cache and now - self._cache_time < self.cache_ttl:
-            return self._cache
+        if self.cache and time.time() - self.cache_time < self.cache_ttl:
+            return self.cache
         try:
-            crypto = await self._fetch_crypto_rates_in_usd()
-            fiat = await self._fetch_fiat_rates_in_usd()
-            self._cache = {**crypto, **fiat}
-            self._cache_time = now
-            return self._cache
+            values = {}
+            values.update(await self._crypto())
+            values.update(await self._fiat())
+            self.cache = values
+            self.cache_time = time.time()
+            return values
         except Exception:
-            if self._cache:
-                return self._cache
+            if self.cache:
+                return self.cache
             return {
                 "BTC": 90000.0,
                 "USDT": 1.0,
@@ -64,11 +64,11 @@ class RateService:
 
     async def convert(self, amount: float, from_currency: str, to_currency: str, fee_fraction: float):
         values = await self.get_usd_values()
-        market_rate = values[from_currency.upper()] / values[to_currency.upper()]
+        market_rate = values[from_currency] / values[to_currency]
         result = amount * market_rate * (1 - fee_fraction)
         return round(result, 8), round(market_rate, 8)
 
-    async def get_table(self, quote: str) -> Dict[str, float]:
+    async def get_table(self, quote: str):
         values = await self.get_usd_values()
-        quote_value = values[quote.upper()]
-        return {cur: round(usd_val / quote_value, 8) for cur, usd_val in values.items()}
+        q = values[quote]
+        return {cur: round(val / q, 8) for cur, val in values.items()}
