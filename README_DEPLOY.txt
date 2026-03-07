@@ -1,27 +1,33 @@
-WHAT TO UPLOAD TO GITHUB
+UPLOAD TO GITHUB
 - main.py
 - config.py
 - database.py
 - i18n.py
 - keyboards.py
+- handlers/
+- services/
 - requirements.txt
 - .env.example
 - .gitignore
-- handlers/ folder
-- services/ folder
+- README_DEPLOY.txt
 
-WHAT TO KEEP ONLY IN BOTHOST
-- .env  (create from .env.example and put your real BOT_TOKEN)
-- exchange_bot.db (will appear automatically after first launch)
+DO NOT UPLOAD TO GITHUB
+- your real .env
+- exchange_bot.db
 
-HOW TO START ON BOTHOST
-1. Upload all project files from this archive to GitHub.
-2. Connect the repository in Bothost.
-3. In Bothost create the .env file from .env.example.
-4. Put your real Telegram token from BotFather in BOT_TOKEN.
-5. Put your Telegram numeric ID in ADMIN_IDS.
-6. Start the app with command: python main.py
+CREATE IN BOTHOST
+1. Create .env using .env.example
+2. Install dependencies:
+   pip install -r requirements.txt
+3. Start:
+   python main.py
 
-IMPORTANT
-- Never commit the real .env file to GitHub.
-- If Bothost caches the old broken build, do a full rebuild/redeploy.
+READY VALUES FOR YOUR PROJECT
+ADMIN_IDS=8500366305
+SUPPORT_USERNAME=@eeexxxchangerrr
+BOT_USERNAME=Ccchangerrr_bot
+
+ADMIN COMMANDS
+/admin
+/admin_stats
+/admin_requests
