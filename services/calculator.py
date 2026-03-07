@@ -1,6 +1,11 @@
-def calculate_exchange(amount: float, from_rate_usd: float, to_rate_usd: float, client_bonus: float) -> float:
-    if amount <= 0:
-        raise ValueError("Amount must be greater than zero")
-    if from_rate_usd <= 0 or to_rate_usd <= 0:
-        raise ValueError("Rates must be greater than zero")
-    return round(amount * from_rate_usd / to_rate_usd * client_bonus, 6)
+def calculate_fee_with_referral_discount(
+    base_fee: float,
+    referrals_count: int,
+    discount_per_user: float,
+    max_discount: float,
+) -> float:
+    discount = referrals_count * discount_per_user
+    if discount > max_discount:
+        discount = max_discount
+    fee = base_fee - discount
+    return max(fee, 0.0)
