@@ -7,7 +7,6 @@ from keyboards import main_menu_kb, language_kb
 router = Router()
 
 
-# START — только выбор языка
 @router.message(CommandStart())
 async def start_handler(message: Message):
     await message.answer(
@@ -16,7 +15,6 @@ async def start_handler(message: Message):
     )
 
 
-# RUSSIAN
 @router.message(lambda message: message.text == "🇷🇺 Русский")
 async def set_russian(message: Message):
     await message.answer(
@@ -25,7 +23,6 @@ async def set_russian(message: Message):
     )
 
 
-# ENGLISH
 @router.message(lambda message: message.text == "🇬🇧 English")
 async def set_english(message: Message):
     await message.answer(
@@ -34,7 +31,6 @@ async def set_english(message: Message):
     )
 
 
-# RU MENU
 @router.message(lambda message: message.text == "Обменять")
 async def exchange_ru(message: Message):
     await message.answer("Раздел обмена скоро будет доступен.")
@@ -63,7 +59,6 @@ async def change_lang_ru(message: Message):
     )
 
 
-# EN MENU
 @router.message(lambda message: message.text == "Exchange")
 async def exchange_en(message: Message):
     await message.answer("Exchange section will be available soon.")
