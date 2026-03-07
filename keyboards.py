@@ -21,6 +21,15 @@ def main_menu_kb(lang: str = "ru") -> ReplyKeyboardMarkup:
 
     return ReplyKeyboardMarkup(
         keyboard=keyboard,
-        resize_keyboard=True,
-        input_field_placeholder="Выберите действие",
+        resize_keyboard=True
+    )
+
+
+def language_kb() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="🇷🇺 Русский")],
+            [KeyboardButton(text="🇬🇧 English")]
+        ],
+        resize_keyboard=True
     )
