@@ -1,9 +1,0 @@
-This build preserves the previously added functionality:
-- live crypto/fiat rates
-- exchange requests flow
-- 100 latest requests via /requests
-- referral fee discount system
-- admin block/unblock commands
-- card / SBP / crypto payment methods
-- card number / Telegram Wallet choice
-- RU/EN texts already included in the project
