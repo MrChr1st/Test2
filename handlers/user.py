@@ -33,22 +33,22 @@ async def set_english(message: Message):
 
 @router.message(lambda message: message.text == "Обменять")
 async def exchange_ru(message: Message):
-    await message.answer("Раздел обмена скоро будет доступен.")
+    await message.answer("Раздел обмена скоро будет доступен.", reply_markup=main_menu_kb("ru"))
 
 
 @router.message(lambda message: message.text == "Курс валют")
 async def rates_ru(message: Message):
-    await message.answer("Раздел курсов валют скоро будет доступен.")
+    await message.answer("Раздел курсов валют скоро будет доступен.", reply_markup=main_menu_kb("ru"))
 
 
 @router.message(lambda message: message.text == "Реферальная программа")
 async def referral_ru(message: Message):
-    await message.answer("Реферальная программа скоро будет доступна.")
+    await message.answer("Реферальная программа скоро будет доступна.", reply_markup=main_menu_kb("ru"))
 
 
 @router.message(lambda message: message.text == "Поддержка")
 async def support_ru(message: Message):
-    await message.answer("Поддержка: @eeexxxchangerrr")
+    await message.answer("Поддержка: @eeexxxchangerrr", reply_markup=main_menu_kb("ru"))
 
 
 @router.message(lambda message: message.text == "Смена языка")
@@ -61,22 +61,22 @@ async def change_lang_ru(message: Message):
 
 @router.message(lambda message: message.text == "Exchange")
 async def exchange_en(message: Message):
-    await message.answer("Exchange section will be available soon.")
+    await message.answer("Exchange section will be available soon.", reply_markup=main_menu_kb("en"))
 
 
 @router.message(lambda message: message.text == "Rates")
 async def rates_en(message: Message):
-    await message.answer("Rates section will be available soon.")
+    await message.answer("Rates section will be available soon.", reply_markup=main_menu_kb("en"))
 
 
 @router.message(lambda message: message.text == "Referral program")
 async def referral_en(message: Message):
-    await message.answer("Referral program will be available soon.")
+    await message.answer("Referral program will be available soon.", reply_markup=main_menu_kb("en"))
 
 
 @router.message(lambda message: message.text == "Support")
 async def support_en(message: Message):
-    await message.answer("Support: @eeexxxchangerrr")
+    await message.answer("Support: @eeexxxchangerrr", reply_markup=main_menu_kb("en"))
 
 
 @router.message(lambda message: message.text == "Change language")
