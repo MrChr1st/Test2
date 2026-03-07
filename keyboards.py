@@ -29,7 +29,7 @@ def language_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="🇷🇺 Русский")],
-            [KeyboardButton(text="🇬🇧 English")]
+            [KeyboardButton(text="🇬🇧 English")],
         ],
         resize_keyboard=True
     )
