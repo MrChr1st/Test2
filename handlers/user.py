@@ -9,15 +9,19 @@ from keyboards import (
     CURRENCIES,
     QUOTE_CURRENCIES,
     admin_menu_kb,
+    back_kb,
     card_action_kb,
     card_submethod_kb,
+    card_submethod_with_back_kb,
     crypto_choice_kb,
+    crypto_choice_with_back_kb,
     crypto_selected_action_kb,
     currency_kb,
     language_kb,
     main_menu_kb,
     paid_kb,
     payment_method_kb,
+    payment_method_with_back_kb,
     quote_currency_kb,
     remove_kb,
 )
@@ -51,6 +55,19 @@ def user_display(username: str | None, user_id: int) -> str:
 
 def user_profile_link(user_id: int) -> str:
     return f"tg://user?id={user_id}"
+
+async def send_admin_targets(bot, config, text: str):
+    targets = list(config.admin_ids)
+    if getattr(config, "channel_target", ""):
+        targets.append(config.channel_target)
+    for target in targets:
+        try:
+            await bot.send_message(target, text, parse_mode="Markdown")
+        except Exception:
+            pass
+
+def is_back(text: str) -> bool:
+    return text in ["⬅️ Назад", "⬅️ Back"]
 
 async def ensure_not_blocked(message: Message, db) -> bool:
     if db.is_user_blocked(message.from_user.id):
@@ -195,7 +212,12 @@ async def exchange_start(message: Message, db, state: FSMContext):
 @router.message(ExchangeForm.from_currency)
 async def exchange_from(message: Message, db, state: FSMContext):
     lang = get_lang(db, message.from_user.id)
-    cur = (message.text or "").strip().upper()
+    raw_text = (message.text or "").strip()
+    if is_back(raw_text):
+        await state.set_state(ExchangeForm.from_currency)
+        await message.answer(TEXTS[lang]["exchange_intro"], reply_markup=currency_kb())
+        return
+    cur = raw_text.upper()
     if cur not in CURRENCIES:
         await message.answer(TEXTS[lang]["invalid_currency"], reply_markup=currency_kb())
         return
@@ -216,18 +238,24 @@ async def exchange_to(message: Message, db, state: FSMContext):
         return
     await state.update_data(to_currency=cur)
     await state.set_state(ExchangeForm.amount)
-    await message.answer(TEXTS[lang]["enter_amount"], reply_markup=remove_kb())
+    await message.answer(TEXTS[lang]["enter_amount"], reply_markup=back_kb(lang))
 
 @router.message(ExchangeForm.amount)
 async def exchange_amount(message: Message, db, config, rate_service, state: FSMContext):
     lang = get_lang(db, message.from_user.id)
-    raw = (message.text or "").replace(",", ".").strip()
+    raw_text = (message.text or "").strip()
+    if is_back(raw_text):
+        data = await state.get_data()
+        await state.set_state(ExchangeForm.to_currency)
+        await message.answer(TEXTS[lang]["choose_to"], reply_markup=currency_kb(exclude=data.get("from_currency")))
+        return
+    raw = raw_text.replace(",", ".").strip()
     try:
         amount = float(raw)
         if amount <= 0:
             raise ValueError
     except Exception:
-        await message.answer(TEXTS[lang]["invalid_amount"], reply_markup=remove_kb())
+        await message.answer(TEXTS[lang]["invalid_amount"], reply_markup=back_kb(lang))
         return
 
     data = await state.get_data()
@@ -263,29 +291,38 @@ async def exchange_amount(message: Message, db, config, rate_service, state: FSM
     )
     if "RUB" in {data["from_currency"], data["to_currency"]}:
         await message.answer(t(lang, "rub_notice", support=config.support_username), parse_mode="Markdown")
-    await message.answer(TEXTS[lang]["enter_receive"], reply_markup=remove_kb())
+    await message.answer(TEXTS[lang]["enter_receive"], reply_markup=back_kb(lang))
 
 @router.message(ExchangeForm.receive_details)
 async def exchange_receive(message: Message, db, state: FSMContext):
     lang = get_lang(db, message.from_user.id)
-    await state.update_data(receive_details=(message.text or "").strip())
+    raw_text = (message.text or "").strip()
+    if is_back(raw_text):
+        await state.set_state(ExchangeForm.amount)
+        await message.answer(TEXTS[lang]["enter_amount"], reply_markup=back_kb(lang))
+        return
+    await state.update_data(receive_details=raw_text)
     await state.set_state(ExchangeForm.payment_method)
-    await message.answer(TEXTS[lang]["choose_payment"], reply_markup=payment_method_kb(lang))
+    await message.answer(TEXTS[lang]["choose_payment"], reply_markup=payment_method_with_back_kb(lang))
 
 @router.message(ExchangeForm.payment_method)
 async def exchange_payment(message: Message, db, config, state: FSMContext, bot):
     lang = get_lang(db, message.from_user.id)
     text = (message.text or "").strip()
+    if is_back(text):
+        await state.set_state(ExchangeForm.receive_details)
+        await message.answer(TEXTS[lang]["enter_receive"], reply_markup=back_kb(lang))
+        return
 
     if text in ["🪙 Крипта", "🪙 Crypto"]:
         await state.set_state(ExchangeForm.crypto_method)
-        await message.answer(TEXTS[lang]["choose_crypto_method"], reply_markup=crypto_choice_kb(lang))
+        await message.answer(TEXTS[lang]["choose_crypto_method"], reply_markup=crypto_choice_with_back_kb(lang))
         return
     if text in ["⚡ СБП", "⚡ SBP"]:
         await _finalize_request(message, state, db, config, lang, "sbp", "-", bot)
         return
     if text in ["💳 Карта", "💳 Card"]:
-        await message.answer(TEXTS[lang]["choose_card_submethod"], reply_markup=card_submethod_kb(lang))
+        await message.answer(TEXTS[lang]["choose_card_submethod"], reply_markup=card_submethod_with_back_kb(lang))
         return
     if text in ["💳 Номер карты", "💳 Card number"]:
         await _finalize_request(message, state, db, config, lang, "card", "card_number", bot)
@@ -294,7 +331,7 @@ async def exchange_payment(message: Message, db, config, state: FSMContext, bot)
         await _finalize_request(message, state, db, config, lang, "card", "tg_wallet", bot)
         return
 
-    await message.answer(TEXTS[lang]["choose_payment"], reply_markup=payment_method_kb(lang))
+    await message.answer(TEXTS[lang]["choose_payment"], reply_markup=payment_method_with_back_kb(lang))
 
 async def _finalize_request(message, state, db, config, lang, method, submethod, bot):
     data = await state.get_data()
@@ -327,11 +364,7 @@ async def _finalize_request(message, state, db, config, lang, method, submethod,
             amount_to=row["amount_to"],
             receive_details=row["receive_details"],
         )
-        for admin_id in config.admin_ids:
-            try:
-                await bot.send_message(admin_id, admin_text, parse_mode="Markdown")
-            except Exception:
-                pass
+        await send_admin_targets(bot, config, admin_text)
         await message.answer(t(lang, "wallet_operator_msg", support=config.support_username), reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)))
         return request_id
 
@@ -471,11 +504,7 @@ async def request_qr(callback: CallbackQuery, db, config, bot):
             profile_link=user_profile_link(row["user_id"]),
             bybit_id=f"{asset_name}: " + (config.bybit_id if asset == "bybit" else ("TCj4c7BQTEWwZtRRqkoKB2fPvZfchBwM1o" if asset == "usdt" else ("UQCsvhcOlwepsTTWqaj3HNyTCU5C38u4Hrf6U2YGjsNoUBW-" if asset == "ton" else "bc1qy6ej90jpr6x086kn4j84m90x7lsu2a99qzz7hf"))),
         )
-        for admin_id in config.admin_ids:
-            try:
-                await bot.send_message(admin_id, admin_text, parse_mode="Markdown")
-            except Exception:
-                pass
+        await send_admin_targets(bot, config, admin_text)
     await callback.message.answer(TEXTS[lang]["qr_requested_user"])
     await callback.answer()
 
@@ -507,8 +536,4 @@ async def mark_paid(message: Message, db, config, bot):
         receive_details=row["receive_details"],
         payment_method=f"{row['payment_method']} / {row['payment_submethod'] or '-'}",
     )
-    for admin_id in config.admin_ids:
-        try:
-            await bot.send_message(admin_id, admin_text, parse_mode="Markdown")
-        except Exception:
-            pass
+    await send_admin_targets(bot, config, admin_text)
