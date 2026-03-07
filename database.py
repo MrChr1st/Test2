@@ -1,7 +1,7 @@
 import secrets
 import sqlite3
 import string
-from typing import List, Optional
+from typing import Optional
 
 
 class Database:
@@ -16,8 +16,8 @@ class Database:
 
     def _init_db(self):
         with self._connect() as conn:
-            cur = conn.cursor()
-            cur.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS users (
                     user_id INTEGER PRIMARY KEY,
                     username TEXT,
@@ -27,8 +27,10 @@ class Database:
                     is_blocked INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-            """)
-            cur.execute("""
+                """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS exchange_requests (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
@@ -44,35 +46,39 @@ class Database:
                     status TEXT DEFAULT 'new',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-            """)
+                """
+            )
             conn.commit()
 
-    def _generate_ref_code(self, length: int = 8) -> str:
-        alphabet = string.ascii_uppercase + string.digits
-        return "".join(secrets.choice(alphabet) for _ in range(length))
-
     def _generate_unique_ref_code(self) -> str:
+        alphabet = string.ascii_uppercase + string.digits
         while True:
-            code = self._generate_ref_code()
+            code = "".join(secrets.choice(alphabet) for _ in range(8))
             with self._connect() as conn:
-                cur = conn.cursor()
-                cur.execute("SELECT 1 FROM users WHERE ref_code = ?", (code,))
-                if not cur.fetchone():
+                row = conn.execute("SELECT 1 FROM users WHERE ref_code = ?", (code,)).fetchone()
+                if not row:
                     return code
 
-    def create_user_if_not_exists(self, user_id: int, username: Optional[str], language: str = "ru", referred_by: Optional[int] = None):
+    def create_user_if_not_exists(
+        self,
+        user_id: int,
+        username: Optional[str],
+        language: str = "ru",
+        referred_by: Optional[int] = None,
+    ):
         with self._connect() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
-            row = cur.fetchone()
+            row = conn.execute("SELECT user_id, referred_by FROM users WHERE user_id = ?", (user_id,)).fetchone()
             if row:
-                cur.execute("UPDATE users SET username = COALESCE(?, username) WHERE user_id = ?", (username, user_id))
+                conn.execute(
+                    "UPDATE users SET username = COALESCE(?, username) WHERE user_id = ?",
+                    (username, user_id),
+                )
                 conn.commit()
                 return
-            ref_code = self._generate_unique_ref_code()
-            cur.execute(
+
+            conn.execute(
                 "INSERT INTO users (user_id, username, language, ref_code, referred_by) VALUES (?, ?, ?, ?, ?)",
-                (user_id, username, language, ref_code, referred_by),
+                (user_id, username, language, self._generate_unique_ref_code(), referred_by),
             )
             conn.commit()
 
@@ -86,12 +92,12 @@ class Database:
             row = conn.execute("SELECT language FROM users WHERE user_id = ?", (user_id,)).fetchone()
             return row["language"] if row else "ru"
 
-    def get_user_ref_code(self, user_id: int) -> Optional[str]:
+    def get_user_ref_code(self, user_id: int):
         with self._connect() as conn:
             row = conn.execute("SELECT ref_code FROM users WHERE user_id = ?", (user_id,)).fetchone()
             return row["ref_code"] if row else None
 
-    def get_user_id_by_ref_code(self, ref_code: str) -> Optional[int]:
+    def get_user_id_by_ref_code(self, ref_code: str):
         with self._connect() as conn:
             row = conn.execute("SELECT user_id FROM users WHERE ref_code = ?", (ref_code,)).fetchone()
             return row["user_id"] if row else None
@@ -103,14 +109,16 @@ class Database:
 
     def count_completed_referral_requests(self, referrer_user_id: int) -> int:
         with self._connect() as conn:
-            row = conn.execute("""
+            row = conn.execute(
+                """
                 SELECT COUNT(er.id) AS c
                 FROM exchange_requests er
                 JOIN users u ON u.user_id = er.user_id
                 WHERE u.referred_by = ? AND er.status = 'done'
-            """, (referrer_user_id,)).fetchone()
+                """,
+                (referrer_user_id,),
+            ).fetchone()
             return int(row["c"]) if row else 0
-
 
     def is_user_blocked(self, user_id: int) -> bool:
         with self._connect() as conn:
@@ -122,43 +130,43 @@ class Database:
             conn.execute("UPDATE users SET is_blocked = ? WHERE user_id = ?", (1 if blocked else 0, user_id))
             conn.commit()
 
-    def create_exchange_request(
-        self,
-        user_id: int,
-        username: str,
-        from_currency: str,
-        to_currency: str,
-        amount_from: float,
-        amount_to: float,
-        receive_details: str,
-        payment_method: str,
-        payment_submethod: str,
-        payment_url: str,
-        status: str = "waiting_payment",
-    ) -> int:
+    def create_exchange_request(self, **kwargs) -> int:
         with self._connect() as conn:
             cur = conn.cursor()
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO exchange_requests (
-                    user_id, username, from_currency, to_currency,
-                    amount_from, amount_to, receive_details, payment_method,
-                    payment_submethod, payment_url, status
+                    user_id, username, from_currency, to_currency, amount_from, amount_to,
+                    receive_details, payment_method, payment_submethod, payment_url, status
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                user_id, username, from_currency, to_currency,
-                amount_from, amount_to, receive_details, payment_method,
-                payment_submethod, payment_url, status,
-            ))
+                """,
+                (
+                    kwargs["user_id"],
+                    kwargs["username"],
+                    kwargs["from_currency"],
+                    kwargs["to_currency"],
+                    kwargs["amount_from"],
+                    kwargs["amount_to"],
+                    kwargs["receive_details"],
+                    kwargs["payment_method"],
+                    kwargs["payment_submethod"],
+                    kwargs["payment_url"],
+                    kwargs["status"],
+                ),
+            )
             conn.commit()
             return cur.lastrowid
 
     def get_active_request(self, user_id: int):
         with self._connect() as conn:
-            return conn.execute("""
+            return conn.execute(
+                """
                 SELECT * FROM exchange_requests
                 WHERE user_id = ? AND status IN ('waiting_payment', 'paid_pending_review', 'wallet_operator')
                 ORDER BY id DESC LIMIT 1
-            """, (user_id,)).fetchone()
+                """,
+                (user_id,),
+            ).fetchone()
 
     def get_request_by_id(self, request_id: int):
         with self._connect() as conn:
@@ -169,9 +177,6 @@ class Database:
             conn.execute("UPDATE exchange_requests SET status = ? WHERE id = ?", (status, request_id))
             conn.commit()
 
-    def get_last_requests(self, limit: int = 100) -> List[sqlite3.Row]:
+    def get_last_requests(self, limit: int = 100):
         with self._connect() as conn:
-            return conn.execute("""
-                SELECT * FROM exchange_requests
-                ORDER BY id DESC LIMIT ?
-            """, (limit,)).fetchall()
+            return conn.execute("SELECT * FROM exchange_requests ORDER BY id DESC LIMIT ?", (limit,)).fetchall()

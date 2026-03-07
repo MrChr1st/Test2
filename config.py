@@ -23,12 +23,7 @@ class Config:
 
 
 def parse_admin_ids(raw: str) -> List[int]:
-    result = []
-    for item in raw.split(","):
-        item = item.strip()
-        if item:
-            result.append(int(item))
-    return result
+    return [int(x.strip()) for x in raw.split(",") if x.strip()]
 
 
 def load_config() -> Config:

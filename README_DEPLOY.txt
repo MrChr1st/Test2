@@ -1,14 +1,14 @@
-1. Copy all files to your GitHub repository.
-2. Create .env from .env.example.
-3. Fill BOT_TOKEN and later replace CARD_PAYMENT_URL / CRYPTO_PAYMENT_URL with real links.
-4. Install dependencies:
-   pip install -r requirements.txt
-5. Start:
-   python main.py
+Что исправлено:
+- весь выбор только нижними кнопками
+- рефералка исправлена
+- уведомления админу содержат username, user_id и tg://user?id=...
+- команды админа:
+  /requests
+  /block USER_ID
+  /unblock USER_ID
+  /done REQUEST_ID
 
-Admin command:
-   /requests  -> show up to 100 latest requests
-
-Admin commands:
-   /block USER_ID   -> block a user
-   /unblock USER_ID -> unblock a user
+Важно:
+1. Админ должен открыть бота и нажать /start хотя бы один раз.
+2. В .env должен быть правильный ADMIN_IDS.
+3. После изменения файлов сделай redeploy/restart.
