@@ -6,15 +6,15 @@ from texts import TEXTS
 
 router = Router()
 
-def _is_admin(user_id: int, config) -> bool:
+def is_admin(user_id: int, config) -> bool:
     return user_id in config.admin_ids
 
-def _user_display(row):
+def user_display(row) -> str:
     return f"@{row['username']}" if row["username"] else f"id={row['user_id']}"
 
 @router.message(Command("requests"))
 async def requests_handler(message: Message, db, config):
-    if not _is_admin(message.from_user.id, config):
+    if not is_admin(message.from_user.id, config):
         return
     rows = db.get_last_requests(100)
     if not rows:
@@ -25,7 +25,7 @@ async def requests_handler(message: Message, db, config):
     for row in rows:
         part = TEXTS["ru"]["request_row"].format(
             id=row["id"],
-            user_display=_user_display(row),
+            user_display=user_display(row),
             from_cur=row["from_currency"],
             to_cur=row["to_currency"],
             amount_from=row["amount_from"],
@@ -43,7 +43,7 @@ async def requests_handler(message: Message, db, config):
 
 @router.message(Command("block"))
 async def block_handler(message: Message, db, config):
-    if not _is_admin(message.from_user.id, config):
+    if not is_admin(message.from_user.id, config):
         return
     parts = (message.text or "").split(maxsplit=1)
     if len(parts) < 2 or not parts[1].isdigit():
@@ -54,7 +54,7 @@ async def block_handler(message: Message, db, config):
 
 @router.message(Command("unblock"))
 async def unblock_handler(message: Message, db, config):
-    if not _is_admin(message.from_user.id, config):
+    if not is_admin(message.from_user.id, config):
         return
     parts = (message.text or "").split(maxsplit=1)
     if len(parts) < 2 or not parts[1].isdigit():
@@ -65,7 +65,7 @@ async def unblock_handler(message: Message, db, config):
 
 @router.message(Command("done"))
 async def done_handler(message: Message, db, config):
-    if not _is_admin(message.from_user.id, config):
+    if not is_admin(message.from_user.id, config):
         return
     parts = (message.text or "").split(maxsplit=1)
     if len(parts) < 2 or not parts[1].isdigit():
