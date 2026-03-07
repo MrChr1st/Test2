@@ -1,0 +1,4 @@
+Fixed ImportError for RateService.
+Changes:
+1. Added services/__init__.py exporting RateService
+2. main.py now imports from services.rates directly
