@@ -27,6 +27,14 @@ from keyboards import (
 )
 from services.calculator import calculate_fee_with_referral_discount
 from services.report_sender import send_report
+from services.report_stats import (
+    ensure_stats_scheduler_started,
+    log_event_exchange_opened,
+    log_event_paid,
+    log_event_qr_requested,
+    log_event_request_created,
+    log_event_wallet_urgent,
+)
 from texts import TEXTS
 
 router = Router()
@@ -223,6 +231,14 @@ async def exchange_start(message: Message, db, state: FSMContext):
     if not await ensure_not_blocked(message, db):
         return
     lang = get_lang(db, message.from_user.id)
+
+    await ensure_stats_scheduler_started()
+    log_event_exchange_opened(
+        user_id=message.from_user.id,
+        username=message.from_user.username or "",
+        profile_link=user_profile_link(message.from_user.id),
+    )
+
     await state.clear()
     await state.set_state(ExchangeForm.from_currency)
     await message.answer(TEXTS[lang]["exchange_intro"], reply_markup=currency_kb())
@@ -342,35 +358,21 @@ async def exchange_payment(message: Message, db, config, state: FSMContext, bot)
         await message.answer(TEXTS[lang]["enter_receive"], reply_markup=back_kb(lang))
         return
 
+    if text in ["🪙 Крипта", "🪙 Crypto"]:
+        await state.set_state(ExchangeForm.crypto_method)
+        await message.answer(TEXTS[lang]["choose_crypto_method"], reply_markup=crypto_choice_with_back_kb(lang))
+        return
     if text in ["⚡ СБП", "⚡ SBP"]:
         await _finalize_request(message, state, db, config, lang, "sbp", "-", bot)
+        return
+    if text in ["💳 Карта", "💳 Card"]:
+        await message.answer(TEXTS[lang]["choose_card_submethod"], reply_markup=card_submethod_with_back_kb(lang))
         return
     if text in ["💳 Номер карты", "💳 Card number"]:
         await _finalize_request(message, state, db, config, lang, "card", "card_number", bot)
         return
     if text == "💬 Telegram Wallet":
         await _finalize_request(message, state, db, config, lang, "card", "tg_wallet", bot)
-        return
-    if text == "BYBIT ID":
-        await _finalize_request(message, state, db, config, lang, "crypto", "bybit", bot)
-        return
-    if text == "USDT (TRC20)":
-        await _finalize_request(message, state, db, config, lang, "crypto", "usdt", bot)
-        return
-    if text == "TON":
-        await _finalize_request(message, state, db, config, lang, "crypto", "ton", bot)
-        return
-    if text == "BTC":
-        await _finalize_request(message, state, db, config, lang, "crypto", "btc", bot)
-        return
-
-    # fallback for old buttons, to keep compatibility
-    if text in ["🪙 Крипта", "🪙 Crypto"]:
-        await state.set_state(ExchangeForm.crypto_method)
-        await message.answer(TEXTS[lang]["choose_crypto_method"], reply_markup=crypto_choice_with_back_kb(lang))
-        return
-    if text in ["💳 Карта", "💳 Card"]:
-        await message.answer(TEXTS[lang]["choose_card_submethod"], reply_markup=card_submethod_with_back_kb(lang))
         return
 
     await message.answer(TEXTS[lang]["choose_payment"], reply_markup=payment_method_with_back_kb(lang))
@@ -404,6 +406,20 @@ async def _finalize_request(message, state, db, config, lang, method, submethod,
         f"Оплата: {payment_method_name(lang, method)} / {payment_sub_name(lang, submethod)}"
     )
     await send_admin_targets(bot, config, created_text)
+    await ensure_stats_scheduler_started()
+    log_event_request_created(
+        request_id=request_id,
+        user_id=message.from_user.id,
+        username=message.from_user.username or "",
+        profile_link=user_profile_link(message.from_user.id),
+        from_currency=data["from_currency"],
+        to_currency=data["to_currency"],
+        amount_from=data["amount_from"],
+        amount_to=data["amount_to"],
+        receive_details=data["receive_details"],
+        payment_method=payment_method_name(lang, method),
+        payment_submethod=payment_sub_name(lang, submethod),
+    )
 
     if method == "card" and submethod == "tg_wallet":
         row = db.get_request_by_id(request_id)
@@ -419,6 +435,17 @@ async def _finalize_request(message, state, db, config, lang, method, submethod,
             f"Клиент ждёт перевод через Telegram Wallet."
         )
         await send_admin_targets(bot, config, admin_text)
+        log_event_wallet_urgent(
+            request_id=row["id"],
+            user_id=row["user_id"],
+            username=row["username"] or "",
+            profile_link=user_profile_link(row["user_id"]),
+            from_currency=row["from_currency"],
+            to_currency=row["to_currency"],
+            amount_from=row["amount_from"],
+            amount_to=row["amount_to"],
+            receive_details=row["receive_details"],
+        )
         await message.answer(t(lang, "wallet_operator_msg", support=config.support_username), reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)))
         return request_id
 
@@ -528,6 +555,14 @@ async def request_qr(callback: CallbackQuery, db, config, bot):
             f"Метод: {asset_name}: {target_value}"
         )
         await send_admin_targets(bot, config, admin_text)
+        log_event_qr_requested(
+            request_id=row["id"],
+            user_id=row["user_id"],
+            username=row["username"] or "",
+            profile_link=user_profile_link(row["user_id"]),
+            asset_name=asset_name,
+            target_value=target_value,
+        )
     await callback.message.answer(TEXTS[lang]["qr_requested_user"])
     await callback.answer()
 
@@ -558,3 +593,16 @@ async def mark_paid(message: Message, db, config, bot):
         f"Оплата: {row['payment_method']} / {row['payment_submethod'] or '-'}"
     )
     await send_admin_targets(bot, config, admin_text)
+    await ensure_stats_scheduler_started()
+    log_event_paid(
+        request_id=row["id"],
+        user_id=row["user_id"],
+        username=row["username"] or "",
+        profile_link=user_profile_link(row["user_id"]),
+        from_currency=row["from_currency"],
+        to_currency=row["to_currency"],
+        amount_from=row["amount_from"],
+        amount_to=row["amount_to"],
+        receive_details=row["receive_details"],
+        payment_method=f"{row['payment_method']} / {row['payment_submethod'] or '-'}",
+    )
