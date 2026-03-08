@@ -1,13 +1,22 @@
-КлиентБот: статистика и автоотчёты теперь считаются в КлиентБоте.
-Заменить:
+КлиентБот -> Supabase shared stats
+
+Не меняя текущую логику обмена, этот патч добавляет параллельную запись событий и заявок в общую Supabase/Postgres БД.
+
+Что заменить:
 - handlers/user.py
-Добавить:
-- services/report_stats.py
+
+Что добавить:
+- services/supabase_sync.py
+- services/reportbot_shared.py
 - report_settings.py в корень проекта
-И добавить в requirements.txt строку: openpyxl==3.1.5
-Важно: в report_settings.py вставить реальный токен Repoorrttt_bot и свой PRIVATE_CHAT_ID.
-Что будет:
-- сбор статистики по открытиям обмена, заявкам, оплатам, QR и wallet
-- Excel за 24ч
-- текстовая финсводка за 24ч
-- автоотправка каждые 24ч в личку через Repoorrttt_bot
+
+Что добавить в requirements.txt:
+psycopg2-binary==2.9.9
+openpyxl==3.1.5
+
+Что должно быть в .env КлиентБота:
+DATABASE_URL=postgresql://...
+
+Что должно быть в report_settings.py:
+- токен Repoorrttt_bot
+- PRIVATE_CHAT_ID
