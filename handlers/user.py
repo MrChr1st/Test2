@@ -66,11 +66,7 @@ def user_profile_link(user_id: int) -> str:
 
 
 async def send_admin_targets(bot, config, text: str):
-    await send_report(
-        bot_token=config.report_bot_token,
-        chat_id=config.report_chat_id,
-        text=text,
-    )
+    await send_report(text)
 
 
 def is_back(text: str) -> bool:
