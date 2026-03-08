@@ -1,10 +1,11 @@
 import asyncio
 import json
 import logging
-import os
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+from report_settings import REPORT_BOT_TOKEN, REPORT_CHAT_ID
 
 
 QUEUE_FILE = "report_queue.jsonl"
@@ -56,10 +57,10 @@ def _rewrite_queue(items):
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
 
-async def _send_raw(bot_token: str, chat_id: str, text: str) -> bool:
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+async def _send_raw(text: str) -> bool:
+    url = f"https://api.telegram.org/bot{REPORT_BOT_TOKEN}/sendMessage"
     payload = {
-        "chat_id": str(chat_id),
+        "chat_id": str(REPORT_CHAT_ID),
         "text": text,
         "disable_web_page_preview": True,
     }
@@ -88,20 +89,13 @@ async def _send_raw(bot_token: str, chat_id: str, text: str) -> bool:
 
 
 async def flush_report_queue() -> bool:
-    bot_token = os.getenv("REPORT_BOT_TOKEN", "").strip()
-    chat_id = os.getenv("REPORT_CHAT_ID", "").strip()
-
-    if not bot_token or not chat_id:
-        logging.warning("[report_sender] flush skipped: missing env")
-        return False
-
     items = _read_queue()
     if not items:
         return True
 
     remaining = []
     for item in items:
-        ok = await _send_raw(bot_token, chat_id, item["text"])
+        ok = await _send_raw(item["text"])
         if not ok:
             remaining.append(item)
 
@@ -110,16 +104,11 @@ async def flush_report_queue() -> bool:
 
 
 async def send_report(text: str) -> bool:
-    bot_token = os.getenv("REPORT_BOT_TOKEN", "").strip()
-    chat_id = os.getenv("REPORT_CHAT_ID", "").strip()
-
-    if not bot_token or not chat_id or not text:
-        logging.warning(
-            f"[report_sender] missing env: token={bool(bot_token)} chat={chat_id!r}"
-        )
+    if not REPORT_BOT_TOKEN or not REPORT_CHAT_ID or not text:
+        logging.warning("[report_sender] missing token/chat/text")
         return False
 
-    ok = await _send_raw(bot_token, chat_id, text)
+    ok = await _send_raw(text)
     if not ok:
         _queue_message(text)
         logging.warning("[report_sender] queued unsent message")
