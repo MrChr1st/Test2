@@ -342,21 +342,35 @@ async def exchange_payment(message: Message, db, config, state: FSMContext, bot)
         await message.answer(TEXTS[lang]["enter_receive"], reply_markup=back_kb(lang))
         return
 
-    if text in ["🪙 Крипта", "🪙 Crypto"]:
-        await state.set_state(ExchangeForm.crypto_method)
-        await message.answer(TEXTS[lang]["choose_crypto_method"], reply_markup=crypto_choice_with_back_kb(lang))
-        return
     if text in ["⚡ СБП", "⚡ SBP"]:
         await _finalize_request(message, state, db, config, lang, "sbp", "-", bot)
-        return
-    if text in ["💳 Карта", "💳 Card"]:
-        await message.answer(TEXTS[lang]["choose_card_submethod"], reply_markup=card_submethod_with_back_kb(lang))
         return
     if text in ["💳 Номер карты", "💳 Card number"]:
         await _finalize_request(message, state, db, config, lang, "card", "card_number", bot)
         return
     if text == "💬 Telegram Wallet":
         await _finalize_request(message, state, db, config, lang, "card", "tg_wallet", bot)
+        return
+    if text == "BYBIT ID":
+        await _finalize_request(message, state, db, config, lang, "crypto", "bybit", bot)
+        return
+    if text == "USDT (TRC20)":
+        await _finalize_request(message, state, db, config, lang, "crypto", "usdt", bot)
+        return
+    if text == "TON":
+        await _finalize_request(message, state, db, config, lang, "crypto", "ton", bot)
+        return
+    if text == "BTC":
+        await _finalize_request(message, state, db, config, lang, "crypto", "btc", bot)
+        return
+
+    # fallback for old buttons, to keep compatibility
+    if text in ["🪙 Крипта", "🪙 Crypto"]:
+        await state.set_state(ExchangeForm.crypto_method)
+        await message.answer(TEXTS[lang]["choose_crypto_method"], reply_markup=crypto_choice_with_back_kb(lang))
+        return
+    if text in ["💳 Карта", "💳 Card"]:
+        await message.answer(TEXTS[lang]["choose_card_submethod"], reply_markup=card_submethod_with_back_kb(lang))
         return
 
     await message.answer(TEXTS[lang]["choose_payment"], reply_markup=payment_method_with_back_kb(lang))
