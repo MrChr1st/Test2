@@ -1,4 +1,4 @@
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import CommandStart
 from aiogram.filters.command import CommandObject
 from aiogram.fsm.context import FSMContext
@@ -159,7 +159,7 @@ async def support(message: Message, db, config):
 
 
 @router.message(F.text.in_(["🎁 Реферальная программа", "🎁 Referral program"]))
-async def referral(message: Message, db, config):
+async def referral(message: Message, db, config, bot: Bot):
     if not await ensure_not_blocked(message, db):
         return
     lang = get_lang(db, message.from_user.id)
@@ -172,7 +172,18 @@ async def referral(message: Message, db, config):
     completed = db.count_completed_referral_requests(message.from_user.id)
     discount = min(invited * config.referral_fee_discount_per_user, config.max_referral_fee_discount)
     current_fee = max(config.fee - discount, 0.0)
-    link = f"https://t.me/{config.bot_username}?start=ref_{code}"
+
+    bot_username = (getattr(bot, "username", None) or "").strip()
+    if not bot_username:
+        try:
+            me = await bot.get_me()
+            bot_username = (me.username or "").strip()
+        except Exception:
+            bot_username = ""
+    if not bot_username:
+        bot_username = config.bot_username.strip().lstrip("@")
+
+    link = f"https://t.me/{bot_username}?start=ref_{code}"
 
     await message.answer(
         t(
