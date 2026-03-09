@@ -24,6 +24,3 @@ CHANNEL_TARGET: invite link alone is not enough. Add the bot to the channel as a
 - основная БД только Supabase/Postgres через DATABASE_URL
 - SQLite больше не используется
 - данные КлиентБота пишутся прямо в shared_users, shared_exchange_requests, shared_exchange_events
-
-
-BOT_USERNAME for this client bot: Ccchangerrr_bot

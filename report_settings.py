@@ -1,5 +1,8 @@
 import os
+from dotenv import load_dotenv
 
+
+load_dotenv()
 
 REPORT_BOT_TOKEN = os.getenv("REPORT_BOT_TOKEN", "").strip()
 REPORT_CHAT_ID = os.getenv("REPORT_CHAT_ID", "").strip()

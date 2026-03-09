@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 from dataclasses import dataclass
 from typing import List
 
@@ -28,6 +29,7 @@ def parse_admin_ids(raw: str) -> List[int]:
 
 
 def load_config() -> Config:
+    load_dotenv()
     token = os.getenv("BOT_TOKEN", "").strip()
     if not token:
         raise ValueError("BOT_TOKEN is empty")
@@ -39,7 +41,7 @@ def load_config() -> Config:
     return Config(
         bot_token=token,
         admin_ids=parse_admin_ids(os.getenv("ADMIN_IDS", "")),
-        bot_username=os.getenv("BOT_USERNAME", "Ccchangerrr_bot").strip().lstrip("@"),
+        bot_username=os.getenv("BOT_USERNAME", "Ccchangerrr_bot").strip(),
         support_username=os.getenv("SUPPORT_USERNAME", "@eeexxxchangerrr").strip(),
         database_url=database_url,
         fee=float(os.getenv("FEE", "0.0095")),
