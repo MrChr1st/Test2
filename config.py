@@ -39,7 +39,7 @@ def load_config() -> Config:
     return Config(
         bot_token=token,
         admin_ids=parse_admin_ids(os.getenv("ADMIN_IDS", "")),
-        bot_username=os.getenv("BOT_USERNAME", "Ccchangerrr_bot").strip(),
+        bot_username=os.getenv("BOT_USERNAME", "Ccchangerrr_bot").strip().lstrip("@"),
         support_username=os.getenv("SUPPORT_USERNAME", "@eeexxxchangerrr").strip(),
         database_url=database_url,
         fee=float(os.getenv("FEE", "0.0095")),
