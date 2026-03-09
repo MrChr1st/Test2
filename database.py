@@ -353,6 +353,20 @@ class Database:
             (limit,),
         )
 
+    def get_user_last_requests(self, user_id: int, limit: int = 10):
+        return self._fetchall(
+            """
+            SELECT request_id AS id, user_id, username, profile_link, from_currency, to_currency, amount_from,
+                   amount_to, receive_details, payment_method, payment_submethod, status,
+                   created_at, updated_at, paid_at, completed_at, cancelled_at
+            FROM shared_exchange_requests
+            WHERE user_id = %s
+            ORDER BY request_id DESC
+            LIMIT %s
+            """,
+            (user_id, limit),
+        )
+
     def log_opened_exchange(self, user_id: int, username: Optional[str]):
         self._log_event("opened_exchange", None, user_id, username or "", self._profile_link(user_id), {})
 

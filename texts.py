@@ -42,7 +42,7 @@ TEXTS = {
         "admin_qr_requested": "📷 *Запрос QR-кода*\n\nЗаявка: *#{request_id}*\nПользователь: {user_display}\nID: `{user_id}`\nПрофиль: {profile_link}\n\nОтправьте клиенту QR-код для перевода на BYBIT ID `{bybit_id}`.",
         "requests_header": "📚 *Последние заявки*",
         "requests_empty": "Заявок пока нет.",
-        "request_row": "# {id} | {user_display}\n{from_cur} → {to_cur}\n{amount_from} {from_cur} → {amount_to} {to_cur}\nСтатус: {status}\nОплата: {payment_method} / {payment_submethod}\n",
+        "request_row": "# {id} | {user_display}\n{from_cur} → {to_cur}\n{amount_from} {from_cur} → {amount_to} {to_cur}\nСтатус: {status}\nОплата: {payment_method} / {payment_submethod}\nСоздано: {created_at} (МСК)\nОбновлено: {updated_at} (МСК)\nОплачено: {paid_at}\n",
         "admin_blocked": "⛔ Пользователь заблокирован.",
         "admin_unblocked": "✅ Пользователь разблокирован.",
         "admin_done": "✅ Заявка отмечена как выполненная.",

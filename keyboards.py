@@ -29,7 +29,7 @@ def main_menu_kb(lang: str, is_admin: bool = False):
         rows = [
             ["💱 Exchange", "📊 Rates"],
             ["🎁 Referral program", "🛟 Support"],
-            ["🌍 Change language"],
+            ["🧾 My requests", "🌍 Change language"],
         ]
         if is_admin:
             rows.append(["👨‍💼 Admin"])
@@ -38,7 +38,7 @@ def main_menu_kb(lang: str, is_admin: bool = False):
     rows = [
         ["💱 Обменять", "📊 Курс валют"],
         ["🎁 Реферальная программа", "🛟 Поддержка"],
-        ["🌍 Смена языка"],
+        ["🧾 Мои заявки", "🌍 Смена языка"],
     ]
     if is_admin:
         rows.append(["👨‍💼 Admin"])
