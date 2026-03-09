@@ -229,23 +229,31 @@ async def my_requests(message: Message, db, config):
 
     lines = [TEXTS[lang]["my_requests_header"], ""]
     for row in rows:
-        created_at = format_moscow(row.get("created_at"))
+        created_at_raw = format_moscow(row.get("created_at"))
+        if " " in created_at_raw:
+            created_date, created_time = created_at_raw.split(" ", 1)
+        else:
+            created_date, created_time = created_at_raw, ""
         status = status_map.get(lang, {}).get(row.get("status"), row.get("status", "-"))
         if lang == "ru":
             block = (
-                f"#{row['id']}\n"
-                f"{row['from_currency']} → {row['to_currency']}\n"
-                f"Сумма: {row['amount_from']} {row['from_currency']} → {row['amount_to']} {row['to_currency']}\n"
-                f"Статус: {status}\n"
-                f"Создана: {created_at} (МСК)\n"
+                f"🧾 Заявка #{row['id']}\n"
+                f"📅 Дата: {created_date}\n"
+                f"🕒 Время: {created_time} МСК\n"
+                f"💱 Обмен: {row['from_currency']} → {row['to_currency']}\n"
+                f"💰 Сумма: {row['amount_from']} {row['from_currency']}\n"
+                f"📥 К получению: {row['amount_to']} {row['to_currency']}\n"
+                f"📌 Статус: {status}\n"
             )
         else:
             block = (
-                f"#{row['id']}\n"
-                f"{row['from_currency']} → {row['to_currency']}\n"
-                f"Amount: {row['amount_from']} {row['from_currency']} → {row['amount_to']} {row['to_currency']}\n"
-                f"Status: {status}\n"
-                f"Created: {created_at} (MSK)\n"
+                f"🧾 Request #{row['id']}\n"
+                f"📅 Date: {created_date}\n"
+                f"🕒 Time: {created_time} MSK\n"
+                f"💱 Exchange: {row['from_currency']} → {row['to_currency']}\n"
+                f"💰 Amount: {row['amount_from']} {row['from_currency']}\n"
+                f"📥 To receive: {row['amount_to']} {row['to_currency']}\n"
+                f"📌 Status: {status}\n"
             )
         lines.append(block)
 
