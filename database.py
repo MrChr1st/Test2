@@ -2,20 +2,33 @@ import os
 import secrets
 import string
 from typing import Optional
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import psycopg2
 from psycopg2.extras import Json, RealDictCursor
 
 
+def _ensure_sslmode_require(database_url: str) -> str:
+    value = (database_url or "").strip()
+    if not value:
+        return value
+    if "sslmode=" in value:
+        return value
+    parts = urlsplit(value)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query["sslmode"] = "require"
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
 class Database:
     def __init__(self, dsn: str):
-        self.dsn = (dsn or os.getenv("DATABASE_URL", "")).strip()
+        self.dsn = _ensure_sslmode_require((dsn or os.getenv("DATABASE_URL", "")).strip())
         if not self.dsn:
             raise ValueError("DATABASE_URL is empty")
         self._init_db()
 
     def _connect(self):
-        return psycopg2.connect(self.dsn, cursor_factory=RealDictCursor)
+        return psycopg2.connect(self.dsn, cursor_factory=RealDictCursor, connect_timeout=15, application_name="clientbot")
 
     def _fetchone(self, sql: str, params=()):
         with self._connect() as conn:

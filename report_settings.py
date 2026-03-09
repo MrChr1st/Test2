@@ -1,7 +1,9 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 
+load_dotenv(Path(__file__).resolve().parent / ".env")
 load_dotenv()
 
 REPORT_BOT_TOKEN = os.getenv("REPORT_BOT_TOKEN", "").strip()
