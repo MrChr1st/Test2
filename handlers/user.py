@@ -100,11 +100,13 @@ def payment_sub_name(lang: str, submethod: str) -> str:
 @router.message(CommandStart())
 async def start_handler(message: Message, command: CommandObject, db, config):
     referred_by = None
-    if command.args and command.args.startswith("ref_"):
-        code = command.args.replace("ref_", "", 1).strip()
-        ref_user_id = db.get_user_id_by_ref_code(code)
-        if ref_user_id and ref_user_id != message.from_user.id:
-            referred_by = ref_user_id
+    if command.args and command.args.startswith("ref"):
+        raw_code = command.args[3:]
+        code = raw_code.lstrip("_").strip()
+        if code:
+            ref_user_id = db.get_user_id_by_ref_code(code)
+            if ref_user_id and ref_user_id != message.from_user.id:
+                referred_by = ref_user_id
 
     existing_ref_code = db.get_user_ref_code(message.from_user.id)
     existing_lang = db.get_language(message.from_user.id) if existing_ref_code else None
@@ -116,19 +118,9 @@ async def start_handler(message: Message, command: CommandObject, db, config):
         referred_by,
     )
 
+    lang_for_block = existing_lang or db.get_language(message.from_user.id) or "ru"
     if db.is_user_blocked(message.from_user.id):
-        await message.answer(TEXTS[existing_lang or "ru"]["blocked"])
-        return
-
-    if existing_ref_code and existing_lang in ("ru", "en"):
-        await message.answer(
-            TEXTS[existing_lang]["language_selected"],
-            reply_markup=main_menu_kb(existing_lang, is_admin(message.from_user.id, config)),
-        )
-        await message.answer(
-            "Выберите действие в меню ниже." if existing_lang == "ru" else "Choose an option from the menu below.",
-            reply_markup=main_menu_kb(existing_lang, is_admin(message.from_user.id, config)),
-        )
+        await message.answer(TEXTS[lang_for_block]["blocked"])
         return
 
     await message.answer(TEXTS["ru"]["choose_language"], reply_markup=language_kb())
@@ -136,6 +128,7 @@ async def start_handler(message: Message, command: CommandObject, db, config):
 
 @router.message(F.text == "🇷🇺 Русский")
 async def set_ru(message: Message, db, config):
+    db.create_user_if_not_exists(message.from_user.id, message.from_user.username, "ru")
     db.set_language(message.from_user.id, "ru")
     await message.answer(TEXTS["ru"]["language_selected"], reply_markup=main_menu_kb("ru", is_admin(message.from_user.id, config)))
     await message.answer("Выберите действие в меню ниже.", reply_markup=main_menu_kb("ru", is_admin(message.from_user.id, config)))
@@ -143,6 +136,7 @@ async def set_ru(message: Message, db, config):
 
 @router.message(F.text == "🇬🇧 English")
 async def set_en(message: Message, db, config):
+    db.create_user_if_not_exists(message.from_user.id, message.from_user.username, "en")
     db.set_language(message.from_user.id, "en")
     await message.answer(TEXTS["ru"]["language_selected_en"], reply_markup=main_menu_kb("en", is_admin(message.from_user.id, config)))
     await message.answer("Choose an option from the menu below.", reply_markup=main_menu_kb("en", is_admin(message.from_user.id, config)))
@@ -260,13 +254,13 @@ async def referral(message: Message, db, config, bot: Bot):
 
     bot_username = (config.bot_username or "").strip().lstrip("@")
     if not bot_username:
-        bot_username = (getattr(bot, "username", None) or "").strip().lstrip("@")
-    if not bot_username:
         try:
             me = await bot.get_me()
             bot_username = (me.username or "").strip().lstrip("@")
         except Exception:
             bot_username = ""
+    if not bot_username:
+        bot_username = (getattr(bot, "username", None) or "").strip().lstrip("@")
 
     link = f"https://t.me/{bot_username}?start=ref_{code}" if bot_username else f"ref_{code}"
 
