@@ -1,3 +1,4 @@
+from time_utils import format_moscow
 from tempfile import NamedTemporaryFile
 
 from openpyxl import Workbook
@@ -52,7 +53,7 @@ def generate_excel_report_24h(storage) -> str:
     wb = Workbook()
     ws1 = wb.active
     border1 = _style_sheet(ws1, "Открытия обмена", ["Время", "Пользователь", "User ID", "Профиль"])
-    rows1 = [[str(r["created_at"]), r.get("username",""), r.get("user_id",""), r.get("profile_link", "")] for r in opened]
+    rows1 = [[format_moscow(r.get("created_at")), r.get("username",""), r.get("user_id",""), r.get("profile_link", "")] for r in opened]
     _add_rows(ws1, rows1, border1)
     _autosize(ws1)
 
@@ -65,7 +66,7 @@ def generate_excel_report_24h(storage) -> str:
     rows2 = []
     for r in requests:
         rows2.append([
-            str(r["created_at"]),
+            format_moscow(r.get("created_at")),
             r["request_id"],
             r.get("username", ""),
             r.get("user_id", ""),
@@ -77,7 +78,7 @@ def generate_excel_report_24h(storage) -> str:
             r.get("receive_details", ""),
             f"{r.get('payment_method','')} / {r.get('payment_submethod','')}",
             "Оплачено" if r.get("paid_at") else "Ожидает оплаты",
-            str(r["paid_at"]) if r.get("paid_at") else "",
+            format_moscow(r.get("paid_at")) if r.get("paid_at") else "",
         ])
     _add_rows(ws2, rows2, border2)
     _autosize(ws2)

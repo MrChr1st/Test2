@@ -5,6 +5,7 @@ import uuid
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
+from time_utils import MOSCOW_TZ, format_moscow, now_moscow_str
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -21,7 +22,7 @@ _scheduler_started = False
 
 
 def _now_str() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return now_moscow_str()
 
 
 def _append_event(event: dict) -> None:
@@ -48,7 +49,7 @@ def _read_events() -> list[dict]:
 
 
 def _last_24h_events() -> list[dict]:
-    cutoff = datetime.now() - timedelta(hours=24)
+    cutoff = datetime.now(MOSCOW_TZ).replace(tzinfo=None) - timedelta(hours=24)
     result = []
     for item in _read_events():
         try:
@@ -403,7 +404,7 @@ async def _auto_report_loop():
         try:
             hours = max(int(AUTO_REPORT_HOURS), 1)
             last_sent = _read_last_sent_ts()
-            now = datetime.now()
+            now = datetime.now(MOSCOW_TZ).replace(tzinfo=None)
             should_send = False
 
             if not last_sent:
