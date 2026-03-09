@@ -65,7 +65,7 @@ TEXTS = {
         "wallet_operator_msg": "💬 Telegram Wallet transfer selected.\n\nAn operator will contact you shortly to make the transfer.\n\nPlease wait for a message in Telegram. If you have questions, contact support:\n{support}",
         "referral": "🎁 *Referral Program*\n\nInvite friends and unlock better exchange conditions.\n\n🔑 *Your code:* `{code}`\n🔗 *Your link:*\n{link}\n\n👥 *Invited users:* {invited}\n✅ *Completed referral exchanges:* {completed}\n\n💰 *Base fee:* {base_fee:.2f}%\n🎉 *Your fee discount:* {discount:.2f}%\n🔥 *Your current fee:* {current_fee:.2f}%\n\nThe more friends you invite, the lower your fee becomes. It is a live discount system that makes every next exchange more profitable. 🚀",
         "rates_intro": "📊 Choose the currency in which to show the rates.",
-        "rates_fmt": "📊 *Live rates in {quote}*\n\n{body}\n\n💰 Base exchange fee: 0.95%, can be reduced through the referral program.\n\nℹ️ Crypto updates come from CoinGecko API, while fiat comes from Frankfurter API. Fiat is not an exchange tick feed in real time.",
+        "rates_fmt": "📊 *Live rates in {quote}*\n\n{body}\n\n💰 Base exchange fee: 0.95%, can be reduced through the referral program.",
         "same_currency": "⚠️ You cannot choose the same sending and receiving currency.",
         "invalid_currency": "⚠️ Please choose a currency using the buttons below.",
         "invalid_amount": "⚠️ Enter the amount as a number, for example: 1500 or 0.25",

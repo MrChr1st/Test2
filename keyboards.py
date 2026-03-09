@@ -69,8 +69,9 @@ def currency_kb(exclude: str | None = None):
     return _reply(rows)
 
 
-def quote_currency_kb():
-    return _reply([["RUB", "USD"], ["EUR", "INR"]])
+def quote_currency_kb(lang: str = "ru"):
+    back = "⬅️ Back" if lang == "en" else "⬅️ Назад"
+    return _reply([["RUB", "USD"], ["EUR", "INR"], [back]])
 
 
 def payment_method_kb(lang: str):
