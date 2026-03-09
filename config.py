@@ -9,7 +9,7 @@ class Config:
     admin_ids: List[int]
     bot_username: str
     support_username: str
-    sqlite_path: str
+    database_url: str
     fee: float
     referral_fee_discount_per_user: float
     max_referral_fee_discount: float
@@ -32,12 +32,16 @@ def load_config() -> Config:
     if not token:
         raise ValueError("BOT_TOKEN is empty")
 
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if not database_url:
+        raise ValueError("DATABASE_URL is empty")
+
     return Config(
         bot_token=token,
         admin_ids=parse_admin_ids(os.getenv("ADMIN_IDS", "")),
         bot_username=os.getenv("BOT_USERNAME", "Ccchangerrr_bot").strip(),
         support_username=os.getenv("SUPPORT_USERNAME", "@eeexxxchangerrr").strip(),
-        sqlite_path=os.getenv("SQLITE_PATH", "exchange_bot.db").strip(),
+        database_url=database_url,
         fee=float(os.getenv("FEE", "0.0095")),
         referral_fee_discount_per_user=float(os.getenv("REFERRAL_FEE_DISCOUNT_PER_USER", "0.002")),
         max_referral_fee_discount=float(os.getenv("MAX_REFERRAL_FEE_DISCOUNT", "0.0095")),

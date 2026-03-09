@@ -18,3 +18,9 @@
 Crypto payment options now include BYBIT ID, USDT (TRC20), TON, and BTC copy buttons.
 
 CHANNEL_TARGET: invite link alone is not enough. Add the bot to the channel as admin and set CHANNEL_TARGET to @channelusername or numeric chat id.
+
+
+Важно для этой сборки:
+- основная БД только Supabase/Postgres через DATABASE_URL
+- SQLite больше не используется
+- данные КлиентБота пишутся прямо в shared_users, shared_exchange_requests, shared_exchange_events
