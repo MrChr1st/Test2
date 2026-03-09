@@ -3,6 +3,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 from texts import TEXTS
+from time_utils import format_moscow
 
 router = Router()
 
@@ -33,6 +34,11 @@ async def requests_handler(message: Message, db, config):
             status=row["status"],
             payment_method=row["payment_method"] or "-",
             payment_submethod=row["payment_submethod"] or "-",
+            created_at=format_moscow(row.get("created_at")),
+            updated_at=format_moscow(row.get("updated_at")),
+            paid_at=format_moscow(row.get("paid_at")),
+            completed_at=format_moscow(row.get("completed_at")),
+            cancelled_at=format_moscow(row.get("cancelled_at")),
         )
         if len(current) + len(part) > 3500:
             await message.answer(current, parse_mode="Markdown")

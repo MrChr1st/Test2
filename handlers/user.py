@@ -28,6 +28,7 @@ from keyboards import (
 from services.calculator import calculate_fee_with_referral_discount
 from services.report_sender import send_report
 from texts import TEXTS
+from time_utils import format_moscow
 
 router = Router()
 
@@ -99,28 +100,34 @@ def payment_sub_name(lang: str, submethod: str) -> str:
 @router.message(CommandStart())
 async def start_handler(message: Message, command: CommandObject, db, config):
     referred_by = None
-    is_ref_start = False
     if command.args and command.args.startswith("ref_"):
-        is_ref_start = True
         code = command.args.replace("ref_", "", 1).strip()
         ref_user_id = db.get_user_id_by_ref_code(code)
         if ref_user_id and ref_user_id != message.from_user.id:
             referred_by = ref_user_id
 
-    existing_lang = db.get_language(message.from_user.id)
-    db.create_user_if_not_exists(message.from_user.id, message.from_user.username, existing_lang or "ru", referred_by)
+    existing_ref_code = db.get_user_ref_code(message.from_user.id)
+    existing_lang = db.get_language(message.from_user.id) if existing_ref_code else None
+
+    db.create_user_if_not_exists(
+        message.from_user.id,
+        message.from_user.username,
+        existing_lang or "ru",
+        referred_by,
+    )
+
     if db.is_user_blocked(message.from_user.id):
         await message.answer(TEXTS[existing_lang or "ru"]["blocked"])
         return
 
-    lang = db.get_language(message.from_user.id)
-    known_user = bool(db.get_user_ref_code(message.from_user.id))
-    if known_user and not is_ref_start and lang in ("ru", "en"):
-        welcome_key = "language_selected" if lang == "ru" else "language_selected"
-        await message.answer(TEXTS[lang][welcome_key], reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)))
+    if existing_ref_code and existing_lang in ("ru", "en"):
         await message.answer(
-            "Выберите действие в меню ниже." if lang == "ru" else "Choose an option from the menu below.",
-            reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)),
+            TEXTS[existing_lang]["language_selected"],
+            reply_markup=main_menu_kb(existing_lang, is_admin(message.from_user.id, config)),
+        )
+        await message.answer(
+            "Выберите действие в меню ниже." if existing_lang == "ru" else "Choose an option from the menu below.",
+            reply_markup=main_menu_kb(existing_lang, is_admin(message.from_user.id, config)),
         )
         return
 
@@ -188,6 +195,54 @@ async def support(message: Message, db, config):
     )
 
 
+@router.message(F.text.in_(["🧾 Мои заявки", "🧾 My requests"]))
+async def my_requests(message: Message, db, config):
+    if not await ensure_not_blocked(message, db):
+        return
+    lang = get_lang(db, message.from_user.id)
+    rows = db.get_user_last_requests(message.from_user.id, limit=10)
+    if not rows:
+        await message.answer(TEXTS[lang]["my_requests_empty"], reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)))
+        return
+
+    status_map = {
+        "ru": {
+            "waiting_payment": "Ожидает оплаты",
+            "paid_pending_review": "На проверке",
+            "wallet_operator": "Ожидает оператора",
+            "done": "Завершена",
+            "cancelled": "Отменена",
+        },
+        "en": {
+            "waiting_payment": "Waiting for payment",
+            "paid_pending_review": "Under review",
+            "wallet_operator": "Waiting for operator",
+            "done": "Completed",
+            "cancelled": "Cancelled",
+        },
+    }
+
+    lines = [TEXTS[lang]["my_requests_header"], ""]
+    for row in rows:
+        created_at = format_moscow(row.get("created_at"))
+        status = status_map.get(lang, {}).get(row.get("status"), row.get("status", "-"))
+        lines.append(
+            f"#{row['id']}\n"
+            f"{row['from_currency']} → {row['to_currency']}\n"
+            f"{row['amount_from']} {row['from_currency']} → {row['amount_to']} {row['to_currency']}\n"
+            f"Статус: {status}\n" if lang == "ru" else
+            f"#{row['id']}\n"
+            f"{row['from_currency']} → {row['to_currency']}\n"
+            f"{row['amount_from']} {row['from_currency']} → {row['amount_to']} {row['to_currency']}\n"
+            f"Status: {status}\n"
+        )
+        if lang == "ru":
+            lines[-1] += f"Создана: {created_at} (МСК)\n"
+        else:
+            lines[-1] += f"Created: {created_at} (MSK)\n"
+    await message.answer("\n".join(lines), parse_mode="Markdown", reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)))
+
+
 @router.message(F.text.in_(["🎁 Реферальная программа", "🎁 Referral program"]))
 async def referral(message: Message, db, config, bot: Bot):
     if not await ensure_not_blocked(message, db):
@@ -203,17 +258,17 @@ async def referral(message: Message, db, config, bot: Bot):
     discount = min(invited * config.referral_fee_discount_per_user, config.max_referral_fee_discount)
     current_fee = max(config.fee - discount, 0.0)
 
-    bot_username = (getattr(bot, "username", None) or "").strip()
+    bot_username = (config.bot_username or "").strip().lstrip("@")
+    if not bot_username:
+        bot_username = (getattr(bot, "username", None) or "").strip().lstrip("@")
     if not bot_username:
         try:
             me = await bot.get_me()
-            bot_username = (me.username or "").strip()
+            bot_username = (me.username or "").strip().lstrip("@")
         except Exception:
             bot_username = ""
-    if not bot_username:
-        bot_username = config.bot_username.strip().lstrip("@")
 
-    link = f"https://t.me/{bot_username}?start=ref_{code}"
+    link = f"https://t.me/{bot_username}?start=ref_{code}" if bot_username else f"ref_{code}"
 
     await message.answer(
         t(
