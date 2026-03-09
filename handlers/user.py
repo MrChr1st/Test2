@@ -222,6 +222,7 @@ async def rates_pick(message: Message, db, rate_service, state: FSMContext, conf
 async def exchange_start(message: Message, db, state: FSMContext):
     if not await ensure_not_blocked(message, db):
         return
+    db.log_opened_exchange(message.from_user.id, message.from_user.username)
     lang = get_lang(db, message.from_user.id)
     await state.clear()
     await state.set_state(ExchangeForm.from_currency)
@@ -418,6 +419,7 @@ async def _finalize_request(message, state, db, config, lang, method, submethod,
             f"Реквизиты: {row['receive_details']}\n\n"
             f"Клиент ждёт перевод через Telegram Wallet."
         )
+        db.log_wallet_urgent(request_id, row['user_id'], row['username'], row['from_currency'], row['to_currency'], row['amount_from'], row['amount_to'], row['receive_details'])
         await send_admin_targets(bot, config, admin_text)
         await message.answer(t(lang, "wallet_operator_msg", support=config.support_username), reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)))
         return request_id
@@ -527,6 +529,7 @@ async def request_qr(callback: CallbackQuery, db, config, bot):
             f"Профиль: {user_profile_link(row['user_id'])}\n\n"
             f"Метод: {asset_name}: {target_value}"
         )
+        db.log_qr_requested(row['id'], row['user_id'], row['username'], asset_name, target_value)
         await send_admin_targets(bot, config, admin_text)
     await callback.message.answer(TEXTS[lang]["qr_requested_user"])
     await callback.answer()
