@@ -28,7 +28,7 @@ from keyboards import (
 from services.calculator import calculate_fee_with_referral_discount
 from services.report_sender import send_report
 from texts import TEXTS
-from time_utils import format_moscow, now_moscow_str
+from time_utils import format_moscow
 
 router = Router()
 
@@ -200,87 +200,64 @@ async def support(message: Message, db, config):
     )
 
 
-
-@router.message(F.text.in_(["🧾 Мои заявки", "🧾 My requests"]))
-@router.message(lambda m: normalized_key(m.text) in {"мои заявки", "my requests"} or "мои заявки" in normalized_key(m.text))
+@router.message(lambda m: "мои заявки" in normalized_key(m.text) or normalized_key(m.text) == "my requests")
 async def my_requests(message: Message, db, config):
     if not await ensure_not_blocked(message, db):
         return
     lang = get_lang(db, message.from_user.id)
-
-    def fmt_amount(value):
-        try:
-            num = float(value)
-            if num.is_integer():
-                return f"{int(num):,}".replace(",", " ")
-            return f"{num:,.4f}".rstrip("0").rstrip(".").replace(",", " ")
-        except Exception:
-            return str(value or "-")
+    rows = db.get_user_last_requests(message.from_user.id, limit=10)
+    if not rows:
+        await message.answer(TEXTS[lang]["my_requests_empty"], reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)))
+        return
 
     status_map = {
         "ru": {
-            "waiting_payment": "🟡 Ожидает оплаты",
-            "paid_pending_review": "🟠 На проверке",
-            "wallet_operator": "🔵 Ожидает оператора",
-            "done": "🟢 Завершена",
-            "cancelled": "🔴 Отменена",
+            "waiting_payment": "Ожидает оплаты",
+            "paid_pending_review": "На проверке",
+            "wallet_operator": "Ожидает оператора",
+            "done": "Завершена",
+            "cancelled": "Отменена",
         },
         "en": {
-            "waiting_payment": "🟡 Waiting for payment",
-            "paid_pending_review": "🟠 Under review",
-            "wallet_operator": "🔵 Waiting for operator",
-            "done": "🟢 Completed",
-            "cancelled": "🔴 Cancelled",
+            "waiting_payment": "Waiting for payment",
+            "paid_pending_review": "Under review",
+            "wallet_operator": "Waiting for operator",
+            "done": "Completed",
+            "cancelled": "Cancelled",
         },
     }
 
-    try:
-        rows = db.get_user_last_requests(message.from_user.id, limit=10) or []
-    except Exception:
-        rows = []
-
-    if not rows:
-        empty_text = "🧾 У вас пока нет заявок." if lang == "ru" else "🧾 You do not have any requests yet."
-        await message.answer(empty_text, reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)))
-        return
-
-    header = "🧾 Ваши заявки" if lang == "ru" else "🧾 Your requests"
-    blocks = []
+    lines = [TEXTS[lang]["my_requests_header"], ""]
     for row in rows:
         created_at_raw = format_moscow(row.get("created_at"))
         if " " in created_at_raw:
             created_date, created_time = created_at_raw.split(" ", 1)
         else:
-            created_date, created_time = created_at_raw or "-", "-"
-        status = status_map.get(lang, {}).get(row.get("status"), str(row.get("status") or "-"))
+            created_date, created_time = created_at_raw, ""
+        status = status_map.get(lang, {}).get(row.get("status"), row.get("status", "-"))
         if lang == "ru":
             block = (
-                f"🧾 Заявка #{row.get('id', '-')}\n"
+                f"🧾 Заявка #{row['id']}\n"
                 f"📅 Дата: {created_date}\n"
                 f"🕒 Время: {created_time} МСК\n"
-                f"💱 Обмен: {row.get('from_currency', '-')} → {row.get('to_currency', '-')}\n"
-                f"💰 Сумма: {fmt_amount(row.get('amount_from'))} {row.get('from_currency', '')}\n"
-                f"📥 К получению: {fmt_amount(row.get('amount_to'))} {row.get('to_currency', '')}\n"
-                f"📌 Статус: {status}"
+                f"💱 Обмен: {row['from_currency']} → {row['to_currency']}\n"
+                f"💰 Сумма: {row['amount_from']} {row['from_currency']}\n"
+                f"📥 К получению: {row['amount_to']} {row['to_currency']}\n"
+                f"📌 Статус: {status}\n"
             )
         else:
             block = (
-                f"🧾 Request #{row.get('id', '-')}\n"
+                f"🧾 Request #{row['id']}\n"
                 f"📅 Date: {created_date}\n"
                 f"🕒 Time: {created_time} MSK\n"
-                f"💱 Exchange: {row.get('from_currency', '-')} → {row.get('to_currency', '-')}\n"
-                f"💰 Amount: {fmt_amount(row.get('amount_from'))} {row.get('from_currency', '')}\n"
-                f"📥 To receive: {fmt_amount(row.get('amount_to'))} {row.get('to_currency', '')}\n"
-                f"📌 Status: {status}"
+                f"💱 Exchange: {row['from_currency']} → {row['to_currency']}\n"
+                f"💰 Amount: {row['amount_from']} {row['from_currency']}\n"
+                f"📥 To receive: {row['amount_to']} {row['to_currency']}\n"
+                f"📌 Status: {status}\n"
             )
-        blocks.append(block)
+        lines.append(block)
 
-    text = header + "\n\n" + "\n\n".join(blocks)
-    for i in range(0, len(text), 3500):
-        await message.answer(
-            text[i:i + 3500],
-            reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)) if i == 0 else None,
-        )
+    await message.answer("\n".join(lines), reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)))
 
 
 @router.message(lambda m: normalized_key(m.text) in {"реферальная программа", "referral program"})
@@ -334,54 +311,51 @@ async def rates_start(message: Message, db, state: FSMContext):
     lang = get_lang(db, message.from_user.id)
     await state.clear()
     await state.set_state(RatesForm.quote)
-    await message.answer(TEXTS[lang]["rates_intro"], reply_markup=quote_currency_kb())
-
+    await message.answer(TEXTS[lang]["rates_intro"], reply_markup=quote_currency_kb(lang))
 
 
 @router.message(RatesForm.quote)
 async def rates_pick(message: Message, db, rate_service, state: FSMContext, config):
     lang = get_lang(db, message.from_user.id)
-    quote = (message.text or "").strip().upper()
-    if quote not in QUOTE_CURRENCIES:
-        await message.answer(TEXTS[lang]["invalid_currency"], reply_markup=quote_currency_kb())
+    raw_text = (message.text or "").strip()
+    if is_back(raw_text):
+        await state.clear()
+        await message.answer(
+            "Выберите действие в меню ниже." if lang == "ru" else "Choose an option from the menu below.",
+            reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)),
+        )
         return
-
+    quote = raw_text.upper()
+    if quote not in QUOTE_CURRENCIES:
+        await message.answer(TEXTS[lang]["invalid_currency"], reply_markup=quote_currency_kb(lang))
+        return
     table = await rate_service.get_table(quote)
 
-    def fmt_rate(value: float, quote_currency: str) -> str:
-        value = float(value)
-        if quote_currency == "RUB":
-            return f"{value:,.0f}".replace(",", " ") + "₽"
-        if quote_currency == "USD":
-            return "$" + f"{value:,.2f}".replace(",", " ").rstrip("0").rstrip(".")
-        if quote_currency == "EUR":
-            return f"{value:,.2f}".replace(",", " ").rstrip("0").rstrip(".") + "€"
-        if quote_currency == "INR":
-            return f"{value:,.2f}".replace(",", " ").rstrip("0").rstrip(".") + "₹"
-        return f"{value:,.6f}".replace(",", " ").rstrip("0").rstrip(".")
-
-    order = ["BTC", "USDT", "TON", "USD", "EUR", "INR", "RUB"]
-    labels_ru = {"RUB": "рубля", "USD": "доллара", "EUR": "евро", "INR": "рупии"}
-    labels_en = {"RUB": "RUB", "USD": "USD", "EUR": "EUR", "INR": "INR"}
-
+    symbols = {"RUB": "₽", "USD": "$", "EUR": "€", "INR": "₹"}
+    symbol = symbols.get(quote, quote)
+    ordered = ["BTC", "TON", "USDT", "USD", "EUR", "INR", "RUB"]
     lines = []
-    for cur in order:
+    for cur in ordered:
         if cur == quote or cur not in table:
             continue
-        lines.append(f"{cur} — {fmt_rate(table[cur], quote)}")
+        val = table[cur]
+        if quote in {"RUB", "INR"}:
+            fmt = f"{val:,.2f}".replace(",", " ")
+        else:
+            fmt = f"{val:,.4f}".replace(",", " ").rstrip("0").rstrip(".")
+        if quote in symbols:
+            line = f"{cur} — {fmt}{symbol}"
+        else:
+            line = f"{cur} — {fmt} {quote}"
+        lines.append(line)
+    body = "\n".join(lines)
 
-    if lang == "ru":
-        title = f"💱 Курс относительно {labels_ru.get(quote, quote)}"
-        updated = f"🕒 Обновлено: {now_moscow_str('%d.%m.%Y %H:%M')} МСК"
-        footer = "Выберите другую валюту кнопками ниже."
-    else:
-        title = f"💱 Rates against {labels_en.get(quote, quote)}"
-        updated = f"🕒 Updated: {now_moscow_str('%d.%m.%Y %H:%M')} MSK"
-        footer = "Choose another currency using the buttons below."
-
-    text = title + "\n\n" + "\n".join(lines) + "\n\n" + updated + "\n" + footer
-    await state.set_state(RatesForm.quote)
-    await message.answer(text, reply_markup=quote_currency_kb())
+    await state.clear()
+    await message.answer(
+        t(lang, "rates_fmt", quote=quote, body=body),
+        parse_mode="Markdown",
+        reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)),
+    )
 
 
 @router.message(F.text.in_(["💱 Обменять", "💱 Exchange"]))
