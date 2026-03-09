@@ -74,6 +74,17 @@ def is_back(text: str) -> bool:
     return text in ["⬅️ Назад", "⬅️ Back"]
 
 
+def normalize_text(value: str | None) -> str:
+    return " ".join((value or "").replace("️", "").split()).strip()
+
+
+def normalized_key(value: str | None) -> str:
+    text = normalize_text(value)
+    for token in ["🌍", "🧾", "🎁", "🛟", "✅", "💱", "📊", "👨‍💼", "📚", "ℹ️", "⚡", "💳", "🪙", "💬", "🚀"]:
+        text = text.replace(token, "")
+    return " ".join(text.split()).strip().lower()
+
+
 async def ensure_not_blocked(message: Message, db) -> bool:
     if db.is_user_blocked(message.from_user.id):
         await message.answer(TEXTS[get_lang(db, message.from_user.id)]["blocked"])
@@ -154,7 +165,7 @@ async def menu_handler(message: Message, db, config):
     )
 
 
-@router.message(F.text.in_(["🌍 Смена языка", "🌍 Change language"]))
+@router.message(lambda m: normalized_key(m.text) in {"смена языка", "change language"})
 async def change_lang(message: Message):
     await message.answer(TEXTS["ru"]["choose_language"], reply_markup=language_kb())
 
@@ -178,7 +189,7 @@ async def admin_help_button(message: Message, db):
     await message.answer(TEXTS[lang]["admin_help"], parse_mode="Markdown")
 
 
-@router.message(F.text.in_(["🛟 Поддержка", "🛟 Support"]))
+@router.message(lambda m: normalized_key(m.text) in {"поддержка", "support"})
 async def support(message: Message, db, config):
     if not await ensure_not_blocked(message, db):
         return
@@ -189,7 +200,7 @@ async def support(message: Message, db, config):
     )
 
 
-@router.message(F.text.in_(["🧾 Мои заявки", "🧾 My requests"]))
+@router.message(lambda m: "мои заявки" in normalized_key(m.text) or normalized_key(m.text) == "my requests")
 async def my_requests(message: Message, db, config):
     if not await ensure_not_blocked(message, db):
         return
@@ -220,24 +231,28 @@ async def my_requests(message: Message, db, config):
     for row in rows:
         created_at = format_moscow(row.get("created_at"))
         status = status_map.get(lang, {}).get(row.get("status"), row.get("status", "-"))
-        lines.append(
-            f"#{row['id']}\n"
-            f"{row['from_currency']} → {row['to_currency']}\n"
-            f"{row['amount_from']} {row['from_currency']} → {row['amount_to']} {row['to_currency']}\n"
-            f"Статус: {status}\n" if lang == "ru" else
-            f"#{row['id']}\n"
-            f"{row['from_currency']} → {row['to_currency']}\n"
-            f"{row['amount_from']} {row['from_currency']} → {row['amount_to']} {row['to_currency']}\n"
-            f"Status: {status}\n"
-        )
         if lang == "ru":
-            lines[-1] += f"Создана: {created_at} (МСК)\n"
+            block = (
+                f"#{row['id']}\n"
+                f"{row['from_currency']} → {row['to_currency']}\n"
+                f"Сумма: {row['amount_from']} {row['from_currency']} → {row['amount_to']} {row['to_currency']}\n"
+                f"Статус: {status}\n"
+                f"Создана: {created_at} (МСК)\n"
+            )
         else:
-            lines[-1] += f"Created: {created_at} (MSK)\n"
-    await message.answer("\n".join(lines), parse_mode="Markdown", reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)))
+            block = (
+                f"#{row['id']}\n"
+                f"{row['from_currency']} → {row['to_currency']}\n"
+                f"Amount: {row['amount_from']} {row['from_currency']} → {row['amount_to']} {row['to_currency']}\n"
+                f"Status: {status}\n"
+                f"Created: {created_at} (MSK)\n"
+            )
+        lines.append(block)
+
+    await message.answer("\n".join(lines), reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)))
 
 
-@router.message(F.text.in_(["🎁 Реферальная программа", "🎁 Referral program"]))
+@router.message(lambda m: normalized_key(m.text) in {"реферальная программа", "referral program"})
 async def referral(message: Message, db, config, bot: Bot):
     if not await ensure_not_blocked(message, db):
         return
@@ -625,22 +640,7 @@ async def request_qr(callback: CallbackQuery, db, config, bot):
     await callback.answer()
 
 
-@router.message()
-async def fallback_handler(message: Message, db, config, state: FSMContext):
-    current_state = await state.get_state()
-    if current_state:
-        return
-    lang = get_lang(db, message.from_user.id)
-    if db.is_user_blocked(message.from_user.id):
-        await message.answer(TEXTS[lang]["blocked"])
-        return
-    await message.answer(
-        "Выберите действие в меню ниже." if lang == "ru" else "Choose an option from the menu below.",
-        reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)),
-    )
-
-
-@router.message(F.text.in_(["✅ Я оплатил", "✅ I paid"]))
+@router.message(lambda m: "оплатил" in normalized_key(m.text) or normalized_key(m.text) == "i paid")
 async def mark_paid(message: Message, db, config, bot):
     lang = get_lang(db, message.from_user.id)
     row = db.get_active_request(message.from_user.id)
@@ -652,6 +652,7 @@ async def mark_paid(message: Message, db, config, bot):
     await message.answer(
         t(lang, "paid_thanks", support=config.support_username),
         reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)),
+        disable_web_page_preview=True,
     )
 
     admin_text = (
@@ -666,3 +667,24 @@ async def mark_paid(message: Message, db, config, bot):
         f"Оплата: {row['payment_method']} / {row['payment_submethod'] or '-'}"
     )
     await send_admin_targets(bot, config, admin_text)
+    return
+
+
+@router.message()
+async def fallback_handler(message: Message, db, config, state: FSMContext):
+    current_state = await state.get_state()
+    if current_state:
+        return
+    key = normalized_key(message.text)
+    if "оплатил" in key or key == "i paid" or "мои заявки" in key or key == "my requests":
+        return
+    lang = get_lang(db, message.from_user.id)
+    if db.is_user_blocked(message.from_user.id):
+        await message.answer(TEXTS[lang]["blocked"])
+        return
+    await message.answer(
+        "Выберите действие в меню ниже." if lang == "ru" else "Choose an option from the menu below.",
+        reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)),
+    )
+
+
