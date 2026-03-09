@@ -1,5 +1,5 @@
 from aiogram import Bot, F, Router
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.filters.command import CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -99,15 +99,31 @@ def payment_sub_name(lang: str, submethod: str) -> str:
 @router.message(CommandStart())
 async def start_handler(message: Message, command: CommandObject, db, config):
     referred_by = None
+    is_ref_start = False
     if command.args and command.args.startswith("ref_"):
+        is_ref_start = True
         code = command.args.replace("ref_", "", 1).strip()
         ref_user_id = db.get_user_id_by_ref_code(code)
         if ref_user_id and ref_user_id != message.from_user.id:
             referred_by = ref_user_id
-    db.create_user_if_not_exists(message.from_user.id, message.from_user.username, "ru", referred_by)
+
+    existing_lang = db.get_language(message.from_user.id)
+    db.create_user_if_not_exists(message.from_user.id, message.from_user.username, existing_lang or "ru", referred_by)
     if db.is_user_blocked(message.from_user.id):
-        await message.answer(TEXTS["ru"]["blocked"])
+        await message.answer(TEXTS[existing_lang or "ru"]["blocked"])
         return
+
+    lang = db.get_language(message.from_user.id)
+    known_user = bool(db.get_user_ref_code(message.from_user.id))
+    if known_user and not is_ref_start and lang in ("ru", "en"):
+        welcome_key = "language_selected" if lang == "ru" else "language_selected"
+        await message.answer(TEXTS[lang][welcome_key], reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)))
+        await message.answer(
+            "Выберите действие в меню ниже." if lang == "ru" else "Choose an option from the menu below.",
+            reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)),
+        )
+        return
+
     await message.answer(TEXTS["ru"]["choose_language"], reply_markup=language_kb())
 
 
@@ -115,12 +131,26 @@ async def start_handler(message: Message, command: CommandObject, db, config):
 async def set_ru(message: Message, db, config):
     db.set_language(message.from_user.id, "ru")
     await message.answer(TEXTS["ru"]["language_selected"], reply_markup=main_menu_kb("ru", is_admin(message.from_user.id, config)))
+    await message.answer("Выберите действие в меню ниже.", reply_markup=main_menu_kb("ru", is_admin(message.from_user.id, config)))
 
 
 @router.message(F.text == "🇬🇧 English")
 async def set_en(message: Message, db, config):
     db.set_language(message.from_user.id, "en")
     await message.answer(TEXTS["ru"]["language_selected_en"], reply_markup=main_menu_kb("en", is_admin(message.from_user.id, config)))
+    await message.answer("Choose an option from the menu below.", reply_markup=main_menu_kb("en", is_admin(message.from_user.id, config)))
+
+
+@router.message(Command("menu"))
+async def menu_handler(message: Message, db, config):
+    lang = get_lang(db, message.from_user.id)
+    if db.is_user_blocked(message.from_user.id):
+        await message.answer(TEXTS[lang]["blocked"])
+        return
+    await message.answer(
+        "Выберите действие в меню ниже." if lang == "ru" else "Choose an option from the menu below.",
+        reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)),
+    )
 
 
 @router.message(F.text.in_(["🌍 Смена языка", "🌍 Change language"]))
@@ -544,6 +574,21 @@ async def request_qr(callback: CallbackQuery, db, config, bot):
         await send_admin_targets(bot, config, admin_text)
     await callback.message.answer(TEXTS[lang]["qr_requested_user"])
     await callback.answer()
+
+
+@router.message()
+async def fallback_handler(message: Message, db, config, state: FSMContext):
+    current_state = await state.get_state()
+    if current_state:
+        return
+    lang = get_lang(db, message.from_user.id)
+    if db.is_user_blocked(message.from_user.id):
+        await message.answer(TEXTS[lang]["blocked"])
+        return
+    await message.answer(
+        "Выберите действие в меню ниже." if lang == "ru" else "Choose an option from the menu below.",
+        reply_markup=main_menu_kb(lang, is_admin(message.from_user.id, config)),
+    )
 
 
 @router.message(F.text.in_(["✅ Я оплатил", "✅ I paid"]))
